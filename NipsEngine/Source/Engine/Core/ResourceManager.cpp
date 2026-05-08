@@ -16,6 +16,10 @@
 #include "SimpleJSON/json.hpp"
 #include "WICTextureLoader.h"
 
+
+#include "Asset/FBX/FbxImporter.h"
+#include "Asset/FBX/FbxManagerWrapper.h"
+
 namespace
 {
     constexpr const char* DefaultUberLitShaderPath = "Shaders/UberLit.hlsl";
@@ -547,6 +551,17 @@ void FResourceManager::LoadFromAssetDirectory(const FString& Path)
             Resource.bNormalizeToUnitCube = false;
             StaticMeshRegistry[Resource.Name] = Resource;
         }
+        else if (Extension == L".fbx")
+        {
+            ObjFilePaths.push_back(RelativePath);
+
+            FStaticMeshResource Resource;
+            Resource.Name = RelativePath;
+            Resource.Path = RelativePath;
+            Resource.bPreload = false;
+            Resource.bNormalizeToUnitCube = false;
+            StaticMeshRegistry[Resource.Name] = Resource;
+        }
         else if (Extension == L".mtl")
         {
             // TODO: 현재는 UberLit을 기본 static mesh shader로 사용
@@ -653,6 +668,17 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
             const FString RelativePath = FPaths::ToString(fs::relative(FilePath, ProjectRootPath));
 
             if (Extension == L".obj")
+            {
+                ObjFilePaths.push_back(RelativePath);
+
+                FStaticMeshResource Resource;
+                Resource.Name = RelativePath;
+                Resource.Path = RelativePath;
+                Resource.bPreload = false;
+                Resource.bNormalizeToUnitCube = false;
+                StaticMeshRegistry[Resource.Name] = Resource;
+            }
+            else if (Extension == L".fbx")
             {
                 ObjFilePaths.push_back(RelativePath);
 
@@ -2621,7 +2647,27 @@ UStaticMesh* FResourceManager::LoadStaticMeshWithOptions(const FString& Path, co
     if (LoadedMeshData == nullptr)
     {
         const auto ObjStart = std::chrono::steady_clock::now();
-        LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
+
+        LoadedMeshData = [&]() -> FStaticMesh*
+        {
+            FFbxManagerWrapper& FbxManager = FFbxManagerWrapper::Get();
+            FbxManager.Initialize();
+
+            FbxScene* Scene = FbxManager.LoadFbxScene(Path);
+            if (Scene == nullptr)
+            {
+                return nullptr;
+            }
+
+            FFbxImporter FbxImporter;
+            FStaticMesh* Mesh = FbxImporter.ImportStaticMesh(Scene);
+
+            Scene->Destroy();
+            return Mesh;
+        }();
+
+
+        //LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
         const auto ObjEnd = std::chrono::steady_clock::now();
         ObjLoadSec = std::chrono::duration<double>(ObjEnd - ObjStart).count();
 
