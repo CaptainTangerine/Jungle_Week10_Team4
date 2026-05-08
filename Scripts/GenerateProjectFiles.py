@@ -56,10 +56,16 @@ INCLUDE_PATHS = [
     "ThirdParty\\ImGui",
     "Source\\Editor",
     ".",
+    "ThirdParty\\sol2\\include",
+    "ThirdParty\\FMOD\\inc",
+    "ThirdParty\\Lua",
+    "ThirdParty\\FBXSDK\\include",
 ]
 
 # Library paths (relative to project dir)
-LIBRARY_PATHS = []
+LIBRARY_PATHS = [
+    "ThirdParty\\FMOD\\lib\\x64",
+]
 
 # NuGet packages (id, version) — restored via packages.config
 NUGET_PACKAGES = [
@@ -256,7 +262,7 @@ def generate_vcxproj(files: dict[str, list[str]]):
         if is_win32:
             defs = f"WIN32;{'NDEBUG' if is_release else '_DEBUG'};_CONSOLE;WITH_EDITOR=1;NOMINMAX;%(PreprocessorDefinitions);"
         else:
-            defs = f"{'NDEBUG' if is_release else '_DEBUG'};_CONSOLE;WITH_EDITOR=1;NOMINMAX;%(PreprocessorDefinitions);"
+            defs = f"{'NDEBUG' if is_release else '_DEBUG'};_CONSOLE;WITH_EDITOR=1;NOMINMAX;%(PreprocessorDefinitions);FBXSHARED;"
             
         if is_viewer:
             defs += "IS_OBJ_VIEWER=1;"
@@ -273,6 +279,17 @@ def generate_vcxproj(files: dict[str, list[str]]):
         link = ET.SubElement(idg, "Link")
         ET.SubElement(link, "SubSystem").text = "Windows" if is_x64 else "Console"
         ET.SubElement(link, "GenerateDebugInformation").text = "true"
+
+        if is_x64:
+            fbx_lib_dir = "release" if is_release else "debug"
+            ET.SubElement(link, "AdditionalLibraryDirectories").text = f"$(ProjectDir)ThirdParty\\FBXSDK\\{fbx_lib_dir};%(AdditionalLibraryDirectories)"
+            ET.SubElement(link, "AdditionalDependencies").text = "libfbxsdk.lib;%(AdditionalDependencies)"
+
+            post_build = ET.SubElement(idg, "PostBuildEvent")
+            ET.SubElement(post_build, "Command").text = (
+                'copy /Y "$(ProjectDir)ThirdParty\\FMOD\\lib\\x64\\fmod.dll" "$(OutDir)fmod.dll"\n'
+                'xcopy /y /d "$(ProjectDir)ThirdParty\\FBXSDK\\$(Configuration)\\libfbxsdk.dll" "$(OutDir)"'
+            )
 
     # ClCompile items
     ig = ET.SubElement(proj, "ItemGroup")

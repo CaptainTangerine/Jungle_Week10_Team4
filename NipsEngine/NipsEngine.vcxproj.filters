@@ -243,6 +243,7 @@
     <FxCompile Include="Shaders\Multipass\PresentPass.hlsl">
       <Filter>Shaders\Multipass</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\Multipass\ScreenEffectsRenderPass.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Editor\EditorEngine.cpp">
@@ -874,7 +875,6 @@
     <ClCompile Include="Source\Engine\Component\Script\ScriptComponent.cpp" />
     <ClCompile Include="Source\Engine\Scripting\LuaBinder.cpp" />
     <ClCompile Include="Source\Engine\Scripting\LuaScriptSubsystem.cpp" />
-    <ClCompile Include="Source\Engine\GameFramework\DelegateTestActor.cpp" />
     <ClCompile Include="Source\Game\GameEngine.cpp">
       <Filter>Source\Game</Filter>
     </ClCompile>
@@ -915,6 +915,8 @@
     <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp" />
     <ClCompile Include="Source\Engine\DriftSalvage\ExplosionSystem.cpp" />
     <ClCompile Include="Source\Engine\Render\RingBatcher.cpp" />
+    <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FBX\FbxManagerWrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Editor\EditorEngine.h">
@@ -1696,7 +1698,6 @@
     <ClInclude Include="Source\Engine\Core\Delegate\MulticastDelegate.h" />
     <ClInclude Include="Source\Engine\Core\Delegate\DelegateHandle.h" />
     <ClInclude Include="Source\Engine\Core\Delegate\DelegateMacros.h" />
-    <ClInclude Include="Source\Engine\GameFramework\DelegateTestActor.h" />
     <ClInclude Include="Source\Game\GameEngine.h">
       <Filter>Source\Game</Filter>
     </ClInclude>
@@ -1737,5 +1738,7 @@
     <ClInclude Include="Source\Engine\DriftSalvage\CollectionSystem.h" />
     <ClInclude Include="Source\Engine\DriftSalvage\ExplosionSystem.h" />
     <ClInclude Include="Source\Engine\Render\RingBatcher.h" />
+    <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.h" />
+    <ClInclude Include="Source\Engine\Asset\FBX\FbxManagerWrapper.h" />
   </ItemGroup>
 </Project>
