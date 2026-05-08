@@ -29,10 +29,10 @@ private:
     void ParseMtllibLine(const FString& Line, FObjRawData& InRawData);
     void ParseUseMtlLine(const FString &Line, FString& CurrentMaterialName, FObjRawData& InRawData);
     bool ParseFaceLine(const FString& Line, const FString& CurrentMaterialName, FObjRawData& InRawData);
-    bool ParseFaceVertexToken(const FString& Token, FObjRawIndex& OutIndex, FObjRawData& InRawData);
+    bool ParseFaceVertexToken(const FString& Token, FRawMeshIndex& OutIndex, FObjRawData& InRawData);
     
-    FNormalVertex MakeVertex(const FObjRawIndex& RawIndex, FObjRawData& RawData) const;
-    uint32 GetOrCreateVertexIndex(const FObjRawIndex& RawIndex, TMap<FObjVertexKey, uint32>& VertexMap, FStaticMesh* StaticMesh, FObjRawData& RawData);
+    FNormalVertex MakeVertex(const FRawMeshIndex& RawIndex, FObjRawData& RawData) const;
+    uint32 GetOrCreateVertexIndex(const FRawMeshIndex& RawIndex, TMap<FObjVertexKey, uint32>& VertexMap, FStaticMesh* StaticMesh, FObjRawData& RawData);
     
     void NormalizeObjRawData(FObjRawData& RawData);
     void NormalizeRawSizeToUnitCube(FObjRawData& RawData);

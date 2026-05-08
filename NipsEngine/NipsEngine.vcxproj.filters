@@ -1012,6 +1012,9 @@
     <ClInclude Include="Source\Engine\Asset\ParticleAtlasLoader.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\RawMeshTypes.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Asset\StaticMesh.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>

@@ -228,18 +228,18 @@ bool FObjLoader::ParseObj(const FString& Path, FObjRawData& InRawData)
         }
     }
 
-    if (InRawData.Normals.empty())
+    if (InRawData.Geometry.Normals.empty())
     {
         ComputeNormals(InRawData);
     }
 
-    return !InRawData.Positions.empty() && !InRawData.Faces.empty();
+    return !InRawData.Geometry.Positions.empty() && !InRawData.Geometry.Faces.empty();
 }
 
 bool FObjLoader::BuildStaticMesh(const FString& Path, FStaticMesh* InStaticMesh, FObjRawData& RawData)
 {
     // Mesh를 생성할 Raw Data 존재 확인
-    if (RawData.Positions.empty() || RawData.Faces.empty())
+    if (RawData.Geometry.Positions.empty() || RawData.Geometry.Faces.empty())
     {
         return false;
     }
@@ -255,7 +255,7 @@ bool FObjLoader::BuildStaticMesh(const FString& Path, FStaticMesh* InStaticMesh,
     TMap<FObjVertexKey, uint32> VertexMap;
     TArray<TArray<uint32>> SlotIndices;
 
-    for (const FObjRawFace& Face : RawData.Faces)
+    for (const FRawMeshFace& Face : RawData.Geometry.Faces)
     {
         if (Face.Vertices.size() < 3)
         {
@@ -364,7 +364,7 @@ bool FObjLoader::ParsePositionLine(const FString& Line, FObjRawData& InRawData)
     Position.Y = std::stof(Tokens[2]);
     Position.Z = std::stof(Tokens[3]);
 
-    InRawData.Positions.push_back(Position);
+    InRawData.Geometry.Positions.push_back(Position);
     return true;
 }
 
@@ -383,7 +383,7 @@ bool FObjLoader::ParseTexCoordLine(const FString& Line, FObjRawData& InRawData)
     TexCoord.X = std::stof(Tokens[1]);
     TexCoord.Y = 1.0f - std::stof(Tokens[2]); 
 
-    InRawData.UVs.push_back(TexCoord);
+    InRawData.Geometry.UVs.push_back(TexCoord);
     return true;
 }
 
@@ -403,7 +403,7 @@ bool FObjLoader::ParseNormalLine(const FString& Line, FObjRawData& InRawData)
     Normal.Y = std::stof(Tokens[2]);
     Normal.Z = std::stof(Tokens[3]);
 
-    InRawData.Normals.push_back(Normal);
+    InRawData.Geometry.Normals.push_back(Normal);
     return true;
 }
 
@@ -443,12 +443,12 @@ bool FObjLoader::ParseFaceLine(const FString& Line, const FString& CurrentMateri
         return false;
     }
 
-    FObjRawFace Face;
+    FRawMeshFace Face;
     Face.MaterialName = CurrentMaterialName;
 
     for (uint32 i = 1; i < Tokens.size(); i++)
     {
-        FObjRawIndex Idx;
+        FRawMeshIndex Idx;
         if (!ParseFaceVertexToken(Tokens[i], Idx, InRawData))
         {
             return false;
@@ -457,13 +457,13 @@ bool FObjLoader::ParseFaceLine(const FString& Line, const FString& CurrentMateri
         Face.Vertices.push_back(Idx);
     }
 
-    InRawData.Faces.push_back(Face);
+    InRawData.Geometry.Faces.push_back(Face);
     return true;
 }
 
 //	Obj index는 1-based이기에 0-based로 변경
 //	NOTE : Obj는 종종 negative index를 사용할 때도 있음 (그러나 지원하지 않는게 편할 듯) - 필요하면 추가할 것
-bool FObjLoader::ParseFaceVertexToken(const FString& Token, FObjRawIndex& OutIndex, FObjRawData& InRawData)
+bool FObjLoader::ParseFaceVertexToken(const FString& Token, FRawMeshIndex& OutIndex, FObjRawData& InRawData)
 {
     TArray<FString> Parts;
     Parts.reserve(3);
@@ -529,17 +529,17 @@ bool FObjLoader::ParseFaceVertexToken(const FString& Token, FObjRawIndex& OutInd
 // }
 
 //	Raw Index -> 최종 Vertex 생성
-FNormalVertex FObjLoader::MakeVertex(const FObjRawIndex& RawIndex, FObjRawData& RawData) const
+FNormalVertex FObjLoader::MakeVertex(const FRawMeshIndex& RawIndex, FObjRawData& RawData) const
 {
     FNormalVertex Vertex = {};
 
-    if (RawIndex.PositionIndex >= 0 && RawIndex.PositionIndex < static_cast<int32>(RawData.Positions.size()))
+    if (RawIndex.PositionIndex >= 0 && RawIndex.PositionIndex < static_cast<int32>(RawData.Geometry.Positions.size()))
     {
-        Vertex.Position = RawData.Positions[RawIndex.PositionIndex];
+        Vertex.Position = RawData.Geometry.Positions[RawIndex.PositionIndex];
     }
-    if (RawIndex.NormalIndex >= 0 && RawIndex.NormalIndex < static_cast<int32>(RawData.Normals.size()))
+    if (RawIndex.NormalIndex >= 0 && RawIndex.NormalIndex < static_cast<int32>(RawData.Geometry.Normals.size()))
     {
-        Vertex.Normal = RawData.Normals[RawIndex.NormalIndex];
+        Vertex.Normal = RawData.Geometry.Normals[RawIndex.NormalIndex];
     }
     else
     {
@@ -549,9 +549,9 @@ FNormalVertex FObjLoader::MakeVertex(const FObjRawIndex& RawIndex, FObjRawData& 
     //	White로 초기화
     Vertex.Color = FColor{ 1.f, 1.f, 1.f, 1.f };
 
-    if (RawIndex.UVIndex >= 0 && RawIndex.UVIndex < static_cast<int32>(RawData.UVs.size()))
+    if (RawIndex.UVIndex >= 0 && RawIndex.UVIndex < static_cast<int32>(RawData.Geometry.UVs.size()))
     {
-        Vertex.UVs = RawData.UVs[RawIndex.UVIndex];
+        Vertex.UVs = RawData.Geometry.UVs[RawIndex.UVIndex];
     }
     else
     {
@@ -561,12 +561,12 @@ FNormalVertex FObjLoader::MakeVertex(const FObjRawIndex& RawIndex, FObjRawData& 
     return Vertex;
 }
 
-uint32 FObjLoader::GetOrCreateVertexIndex(const FObjRawIndex& RawIndex, TMap<FObjVertexKey, uint32>& VertexMap, FStaticMesh* StaticMesh, FObjRawData& RawData)
+uint32 FObjLoader::GetOrCreateVertexIndex(const FRawMeshIndex& RawIndex, TMap<FObjVertexKey, uint32>& VertexMap, FStaticMesh* StaticMesh, FObjRawData& RawData)
 {
     FObjVertexKey Key = {};
-    Key.ObjRawIndex.PositionIndex = RawIndex.PositionIndex;
-    Key.ObjRawIndex.NormalIndex = RawIndex.NormalIndex;
-    Key.ObjRawIndex.UVIndex = RawIndex.UVIndex;
+    Key.RawMeshIndex.PositionIndex = RawIndex.PositionIndex;
+    Key.RawMeshIndex.NormalIndex = RawIndex.NormalIndex;
+    Key.RawMeshIndex.UVIndex = RawIndex.UVIndex;
 
     auto It = VertexMap.find(Key);
     if (It != VertexMap.end())
@@ -588,7 +588,7 @@ uint32 FObjLoader::GetOrCreateVertexIndex(const FObjRawIndex& RawIndex, TMap<FOb
 // - 개별 StaticMesh 컴포넌트에서 Import할 때 Normalize On Import 설정을 켜고 꺼서 조절할 수 있습니다.
 void FObjLoader::NormalizeObjRawData(FObjRawData& RawData)
 {
-    if (RawData.Positions.empty())
+    if (RawData.Geometry.Positions.empty())
     {
         return;
     }
@@ -596,7 +596,7 @@ void FObjLoader::NormalizeObjRawData(FObjRawData& RawData)
     FVector Min(FLT_MAX, FLT_MAX, FLT_MAX);
     FVector Max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
-    for (const FVector& Position : RawData.Positions)
+    for (const FVector& Position : RawData.Geometry.Positions)
     {
         Min.X = std::min(Min.X, Position.X);
         Min.Y = std::min(Min.Y, Position.Y);
@@ -618,7 +618,7 @@ void FObjLoader::NormalizeObjRawData(FObjRawData& RawData)
 
     const float Scale = 1.0f / MaxDim;
 
-    for (FVector& Position : RawData.Positions)
+    for (FVector& Position : RawData.Geometry.Positions)
     {
         Position = (Position - Center) * Scale;
     }
@@ -626,7 +626,7 @@ void FObjLoader::NormalizeObjRawData(FObjRawData& RawData)
 
 void FObjLoader::NormalizeRawSizeToUnitCube(FObjRawData& RawData)
 {
-    if (RawData.Positions.empty())
+    if (RawData.Geometry.Positions.empty())
     {
         return;
     }
@@ -634,7 +634,7 @@ void FObjLoader::NormalizeRawSizeToUnitCube(FObjRawData& RawData)
     FVector Min(FLT_MAX, FLT_MAX, FLT_MAX);
     FVector Max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
-    for (const FVector& Position : RawData.Positions)
+    for (const FVector& Position : RawData.Geometry.Positions)
     {
         Min.X = std::min(Min.X, Position.X);
         Min.Y = std::min(Min.Y, Position.Y);
@@ -647,7 +647,7 @@ void FObjLoader::NormalizeRawSizeToUnitCube(FObjRawData& RawData)
 
     const FVector Center = (Min + Max) * 0.5f;
     
-    for (FVector& Position : RawData.Positions)
+    for (FVector& Position : RawData.Geometry.Positions)
     {
         Position = (Position - Center);
     }
@@ -657,12 +657,12 @@ void FObjLoader::NormalizeRawSizeToUnitCube(FObjRawData& RawData)
 // 각 삼각형의 벡터를 외적하여 법선벡터를 계산합니다. (큰 삼각형일수록 큰 가중치를 갖습니다.)
 void FObjLoader::ComputeNormals(FObjRawData& RawData)
 {
-    const int32 PositionCount = static_cast<int32>(RawData.Positions.size());
+    const int32 PositionCount = static_cast<int32>(RawData.Geometry.Positions.size());
 
     TArray<FVector> Accumulated(PositionCount, FVector(0.0f, 0.0f, 0.0f));
 
     // 각 Face를 삼각형으로 분해하며 면 법선을 누적
-    for (FObjRawFace& Face : RawData.Faces)
+    for (FRawMeshFace& Face : RawData.Geometry.Faces)
     {
         if (Face.Vertices.size() < 3) continue;
 
@@ -675,9 +675,9 @@ void FObjLoader::ComputeNormals(FObjRawData& RawData)
 
             if (I0 < 0 || I1 < 0 || I2 < 0) continue;
 
-            const FVector& P0 = RawData.Positions[I0];
-            const FVector& P1 = RawData.Positions[I1];
-            const FVector& P2 = RawData.Positions[I2];
+            const FVector& P0 = RawData.Geometry.Positions[I0];
+            const FVector& P1 = RawData.Geometry.Positions[I1];
+            const FVector& P2 = RawData.Geometry.Positions[I2];
 
             FVector E01 = P1 - P0;
             FVector E02 = P2 - P0;
@@ -691,19 +691,19 @@ void FObjLoader::ComputeNormals(FObjRawData& RawData)
         }
     }
 
-    // 정규화한 뒤 RawData.Normals에 저장한다. (1:1로 Position과 대응된다.
-    RawData.Normals.resize(PositionCount);
+    // 정규화한 뒤 RawData.Geometry.Normals에 저장한다. (1:1로 Position과 대응된다.
+    RawData.Geometry.Normals.resize(PositionCount);
     for (int32 i = 0; i < PositionCount; ++i)
     {
         FVector Normal = Accumulated[i];
         float Length = Normal.Size();
-        RawData.Normals[i] = (Length > 1e-6f) ? Normal / Length : FVector(0.0f, 0.0f, 1.0f);
+        RawData.Geometry.Normals[i] = (Length > 1e-6f) ? Normal / Length : FVector(0.0f, 0.0f, 1.0f);
     }
 
     // 각 face의 normal index를 position index와 동일하게 연결한다.
-    for (FObjRawFace& Face : RawData.Faces)
+    for (FRawMeshFace& Face : RawData.Geometry.Faces)
     {
-        for (FObjRawIndex& Idx : Face.Vertices)
+        for (FRawMeshIndex& Idx : Face.Vertices)
         {
             Idx.NormalIndex = Idx.PositionIndex;
         }

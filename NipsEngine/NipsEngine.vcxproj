@@ -842,6 +842,7 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     <ClInclude Include="Source\Engine\Asset\ObjLoader.h" />
     <ClInclude Include="Source\Engine\Asset\ObjRawTypes.h" />
     <ClInclude Include="Source\Engine\Asset\ParticleAtlasLoader.h" />
+    <ClInclude Include="Source\Engine\Asset\RawMeshTypes.h" />
     <ClInclude Include="Source\Engine\Asset\StaticMesh.h" />
     <ClInclude Include="Source\Engine\Asset\StaticMeshSimplifier.h" />
     <ClInclude Include="Source\Engine\Asset\StaticMeshTypes.h" />
