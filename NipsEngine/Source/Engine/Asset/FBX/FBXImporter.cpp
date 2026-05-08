@@ -188,7 +188,7 @@ bool FFBXImporter::BuildStaticMeshImportData(FbxNode* Node, FbxMesh* Mesh, OUT F
                 );
             }
 
-            // Position -> ControlPoint의 기반으로 인덱스를 찾고 이 인덱스 기반으로
+            // Position -> 인덱스 기반으로 ControlPoint 정점 찾기
             FbxVector4* pControlPoints = Mesh->GetControlPoints();
             int32 ControlPointIndex = Mesh->GetPolygonVertex(PolygonIndex, VertexInPolygon);
             if (pControlPoints && ControlPointIndex >= 0)
