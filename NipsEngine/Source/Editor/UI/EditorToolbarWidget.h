@@ -20,7 +20,8 @@ public:
         bool* InShowSceneManager,
         bool* InShowMaterialEditor,
         bool* InShowStatProfiler,
-        bool* InShowCameraSequenceEditor);
+        bool* InShowCameraSequenceEditor,
+        bool* InShowFBXSceneViewer);
     virtual void Render(float DeltaTime) override;
 
 private:
@@ -42,4 +43,5 @@ private:
     bool* bShowMaterialEditor = nullptr;
     bool* bShowStatProfiler = nullptr;
     bool* bShowCameraSequenceEditor = nullptr;
+    bool* bShowFBXSceneViewer = nullptr;
 };

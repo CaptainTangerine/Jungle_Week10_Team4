@@ -277,14 +277,16 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;$(ProjectDir)ThirdParty\FBX SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
+copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug\libfbxsdk.dll" "$(OutDir)libfbxsdk.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ShippingDebug|x64'">
@@ -301,14 +303,16 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;$(ProjectDir)ThirdParty\FBX SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
+copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug\libfbxsdk.dll" "$(OutDir)libfbxsdk.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -327,14 +331,16 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;$(ProjectDir)ThirdParty\FBX SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
+copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDir)libfbxsdk.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">
@@ -353,14 +359,16 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;$(ProjectDir)ThirdParty\FBX SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
+copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDir)libfbxsdk.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -375,6 +383,8 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FBX\FBXSDKContext.cpp" />
     <ClCompile Include="Source\Engine\Core\SoundManager.cpp" />
     <ClCompile Include="Source\Engine\Core\TimeManager.cpp" />
     <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp" />
@@ -408,6 +418,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Source\Editor\UI\EditorControlWidget.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ShippingDebug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\EditorFBXSceneViewWidget.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ShippingDebug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">true</ExcludedFromBuild>
     </ClCompile>
@@ -785,6 +799,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.h" />
+    <ClInclude Include="Source\Engine\Asset\FBX\FBXSceneTypes.h" />
+    <ClInclude Include="Source\Engine\Asset\FBX\FBXSDKContext.h" />
     <ClInclude Include="Source\Engine\Core\SoundManager.h" />
     <ClInclude Include="Source\Engine\Core\TimeManager.h" />
     <ClInclude Include="Source\Engine\DriftSalvage\CollectionSystem.h" />
@@ -805,6 +822,7 @@
     <ClInclude Include="Source\Editor\UI\EditorConsoleWidget.h" />
     <ClInclude Include="Source\Editor\UI\EditorControlWidget.h" />
     <ClInclude Include="Source\Editor\UI\EditorCameraSequenceWidget.h" />
+    <ClInclude Include="Source\Editor\UI\EditorFBXSceneViewWidget.h" />
     <ClInclude Include="Source\Editor\UI\EditorMainPanel.h" />
     <ClInclude Include="Source\Editor\UI\EditorMaterialWidget.h" />
     <ClInclude Include="Source\Editor\UI\EditorPlayStreamWidget.h" />
