@@ -1,5 +1,6 @@
 ﻿#include "MeshBufferManager.h"
 
+#include "Asset/SkeletalMeshTypes.h"
 #include "Asset/StaticMesh.h"
 
 void FMeshBufferManager::Create(ID3D11Device* InDevice)
@@ -46,6 +47,12 @@ void FMeshBufferManager::Release()
         }
         StaticMeshBufferMap[i].clear();
     }
+
+    for (auto& pair : SkeletalMeshBufferMap)
+    {
+        pair.second.Release();
+    }
+    SkeletalMeshBufferMap.clear();
     
     Device = nullptr;
 }
@@ -103,6 +110,25 @@ FMeshBuffer* FMeshBufferManager::GetStaticMeshBuffer(const UStaticMesh* StaticMe
 
     FMeshBuffer& NewBuffer = TargetMap[StaticMeshAsset];
     NewBuffer.Create(Device, Vertices, Indices);
+
+    return &NewBuffer;
+}
+
+FMeshBuffer* FMeshBufferManager::GetSkeletalMeshBuffer(const FSkeletalMesh* SkeletalMesh)
+{
+    if (!Device || SkeletalMesh == nullptr || SkeletalMesh->Vertices.empty() || SkeletalMesh->Indices.empty())
+    {
+        return nullptr;
+    }
+
+    auto It = SkeletalMeshBufferMap.find(SkeletalMesh);
+    if (It != SkeletalMeshBufferMap.end())
+    {
+        return &It->second;
+    }
+
+    FMeshBuffer& NewBuffer = SkeletalMeshBufferMap[SkeletalMesh];
+    NewBuffer.Create(Device, SkeletalMesh->Vertices, SkeletalMesh->Indices);
 
     return &NewBuffer;
 }

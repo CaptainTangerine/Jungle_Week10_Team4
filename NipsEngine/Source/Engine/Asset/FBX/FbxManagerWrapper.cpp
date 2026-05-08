@@ -44,10 +44,12 @@ FbxScene* FFbxManagerWrapper::LoadFbxScene(const std::string& FilePath)
     FbxGeometryConverter GeometryConverter(m_SdkManager);
     GeometryConverter.Triangulate(Scene, true);
 
-    // 🚨 함정 2: 좌표계(Axis System) 문제 방어
-    // 엔진 좌표계에 맞게 변환 (DirectX 11 기준인 Y-Up, Left-Handed로 변환)
-    FbxAxisSystem EngineAxis(FbxAxisSystem::eYAxis, FbxAxisSystem::eParityOdd, FbxAxisSystem::eLeftHanded);
-    EngineAxis.ConvertScene(Scene);
+    // 좌표계(Axis System) 문제 방어
+    FbxAxisSystem EngineAxis;
+    if (FbxAxisSystem::ParseAxisSystem("yzx", EngineAxis))
+    {
+        EngineAxis.ConvertScene(Scene);
+    }
 
     return Scene;
 }

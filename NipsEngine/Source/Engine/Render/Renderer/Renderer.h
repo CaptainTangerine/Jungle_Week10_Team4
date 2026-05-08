@@ -186,6 +186,19 @@ private:
         { "BITANGENT",0, DXGI_FORMAT_R32G32B32_FLOAT,    0, static_cast<uint32>(offsetof(FNormalVertex, Bitangent)),D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
+    // SkeletalMesh (FSkeletalVertex) Input Layout
+    D3D11_INPUT_ELEMENT_DESC SkeletalVertexInputLayout[8] =
+    {
+        { "POSITION",     0, DXGI_FORMAT_R32G32B32_FLOAT,    0, static_cast<uint32>(offsetof(FSkeletalVertex, Position)),    D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR",        0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, static_cast<uint32>(offsetof(FSkeletalVertex, Color)),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "NORMAL",       0, DXGI_FORMAT_R32G32B32_FLOAT,    0, static_cast<uint32>(offsetof(FSkeletalVertex, Normal)),      D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD",     0, DXGI_FORMAT_R32G32_FLOAT,       0, static_cast<uint32>(offsetof(FSkeletalVertex, UVs)),         D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TANGENT",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, static_cast<uint32>(offsetof(FSkeletalVertex, Tangent)),     D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "BITANGENT",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0, static_cast<uint32>(offsetof(FSkeletalVertex, Bitangent)),   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_UINT,  0, static_cast<uint32>(offsetof(FSkeletalVertex, BoneIndices)), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "BLENDWEIGHT",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, static_cast<uint32>(offsetof(FSkeletalVertex, BoneWeights)), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+
     D3D11_INPUT_ELEMENT_DESC TextureVertexInputLayout[2] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },

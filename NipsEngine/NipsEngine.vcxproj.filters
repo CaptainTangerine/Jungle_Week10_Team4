@@ -1019,6 +1019,9 @@
     <ClInclude Include="Source\Engine\Asset\StaticMesh.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Asset\StaticMeshSimplifier.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>

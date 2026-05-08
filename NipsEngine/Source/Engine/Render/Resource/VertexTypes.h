@@ -28,6 +28,20 @@ struct FNormalVertex
     FVector Bitangent;
 };
 
+struct FSkeletalVertex
+{
+    static constexpr uint32 MaxBoneInfluences = 4;
+
+    FVector Position;
+    FColor Color;
+    FVector Normal;
+    FVector2 UVs;	//	TexCoord
+    FVector Tangent;
+    FVector Bitangent;
+    uint32 BoneIndices[MaxBoneInfluences] = { 0, 0, 0, 0 };
+    float BoneWeights[MaxBoneInfluences] = { 0.0f, 0.0f, 0.0f, 0.0f };
+};
+
 struct FOverlayVertex
 {
     float X, Y;
