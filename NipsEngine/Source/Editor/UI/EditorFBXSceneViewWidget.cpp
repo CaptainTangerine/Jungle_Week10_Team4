@@ -1,55 +1,64 @@
 #include "Editor/UI/EditorFBXSceneViewWidget.h"
 
-#include "Asset/FBX/FBXSDKContext.h"
-#include "Asset/FBX/FBXSceneTreeBuilder.h"
+#include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
+#include "GameFramework/PrimitiveActors.h"
+#include "GameFramework/World.h"
 #include "ImGui/imgui.h"
+#include "Object/Object.h"
+#include "Runtime/Engine.h"
 
 #include <commdlg.h>
 #include <filesystem>
 
 namespace
 {
-    const char* GetNodeTypeName(EFBXSceneNodeType Type)
+    const char* GetImportNodeTypeName(const FFBXImportNode& Node)
     {
-        switch (Type)
+        if (Node.SkeletalMeshIndex >= 0)
         {
-        case EFBXSceneNodeType::Root:
-            return "Root";
-        case EFBXSceneNodeType::Null:
-            return "Null";
-        case EFBXSceneNodeType::Mesh:
-            return "Mesh";
-        case EFBXSceneNodeType::Skeleton:
-            return "Skeleton";
-        case EFBXSceneNodeType::Camera:
-            return "Camera";
-        case EFBXSceneNodeType::Light:
-            return "Light";
-        default:
-            return "Unknown";
+            return "SkeletalMesh";
         }
+        if (Node.StaticMeshIndex >= 0)
+        {
+            return "StaticMesh";
+        }
+        return "Node";
     }
 
-    ImVec4 GetNodeTypeColor(EFBXSceneNodeType Type)
+    ImVec4 GetImportNodeTypeColor(const FFBXImportNode& Node)
     {
-        switch (Type)
+        if (Node.SkeletalMeshIndex >= 0)
         {
-        case EFBXSceneNodeType::Root:
-            return ImVec4(0.95f, 0.95f, 0.95f, 1.0f);
-        case EFBXSceneNodeType::Mesh:
-            return ImVec4(0.35f, 0.75f, 1.0f, 1.0f);
-        case EFBXSceneNodeType::Skeleton:
-            return ImVec4(1.0f, 0.75f, 0.35f, 1.0f);
-        case EFBXSceneNodeType::Camera:
-            return ImVec4(0.55f, 0.95f, 0.55f, 1.0f);
-        case EFBXSceneNodeType::Light:
-            return ImVec4(1.0f, 0.95f, 0.4f, 1.0f);
-        case EFBXSceneNodeType::Null:
-            return ImVec4(0.65f, 0.65f, 0.65f, 1.0f);
-        default:
-            return ImVec4(0.9f, 0.45f, 0.45f, 1.0f);
+            return ImVec4(1.0f, 0.72f, 0.34f, 1.0f);
         }
+        if (Node.StaticMeshIndex >= 0)
+        {
+            return ImVec4(0.35f, 0.75f, 1.0f, 1.0f);
+        }
+        return ImVec4(0.72f, 0.72f, 0.72f, 1.0f);
+    }
+
+    void ApplyImportNodeTransform(AActor* Actor, const FFBXImportNode& Node)
+    {
+        if (Actor == nullptr)
+        {
+            return;
+        }
+
+        FVector Translation;
+        FVector Scale;
+        FMatrix RotationMatrix;
+        if (!Node.GlobalTransformMatrix.Decompose(Translation, RotationMatrix, Scale))
+        {
+            Translation = Node.GlobalTransformMatrix.GetOrigin();
+            Scale = FVector(1.0f, 1.0f, 1.0f);
+            RotationMatrix = FMatrix::Identity;
+        }
+
+        Actor->SetActorLocation(Translation);
+        Actor->SetActorRotation(RotationMatrix.GetEuler());
+        Actor->SetActorScale(Scale);
     }
 
     FWString GetFBXDialogInitialDir()
@@ -103,35 +112,20 @@ bool FEditorFBXSceneViewWidget::OpenFBXFileDialog(FString& OutFilePath) const
 
 void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 {
-    Snapshot.Clear();
+    ImportScene = FFBXImportScene{};
     SelectedNodeIndex = -1;
     LoadedFilePath = FilePath;
 
-    FFBXSDKContext Context;
-    if (!Context.Initialize())
+    FFBXImporter Importer;
+    ImportScene = Importer.Import(FilePath);
+    if (ImportScene.Nodes.empty())
     {
-        StatusMessage = "Failed to initialize FBX SDK.";
+        StatusMessage = "Failed to import FBX scene.";
         return;
     }
 
-    FbxScene* Scene = Context.LoadScene(FilePath);
-    if (!Scene)
-    {
-        StatusMessage = "Failed to load FBX scene.";
-        return;
-    }
-
-    const bool bBuilt = FFBXSceneTreeBuilder::Build(Scene, Snapshot);
-    Scene->Destroy();
-
-    if (!bBuilt)
-    {
-        StatusMessage = "Failed to build FBX scene tree.";
-        return;
-    }
-
-    SelectedNodeIndex = Snapshot.RootIndex;
-    StatusMessage = "FBX scene loaded.";
+    SelectedNodeIndex = 0;
+    StatusMessage = "FBX import scene loaded.";
 }
 
 void FEditorFBXSceneViewWidget::Render(float DeltaTime)
@@ -179,7 +173,7 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
     ImGui::SameLine();
     if (ImGui::Button("Clear"))
     {
-        Snapshot.Clear();
+        ImportScene = FFBXImportScene{};
         LoadedFilePath.clear();
         SelectedNodeIndex = -1;
         StatusMessage = "No FBX loaded.";
@@ -187,6 +181,21 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
 
     ImGui::SameLine();
     ImGui::Checkbox("Auto Expand", &bAutoExpand);
+
+    ImGui::SameLine();
+    const bool bHasStaticMeshes = !ImportScene.StaticMeshes.empty();
+    if (!bHasStaticMeshes)
+    {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Spawn Static Meshes"))
+    {
+        SpawnImportedStaticMeshes();
+    }
+    if (!bHasStaticMeshes)
+    {
+        ImGui::EndDisabled();
+    }
 }
 
 void FEditorFBXSceneViewWidget::RenderSummary() const
@@ -198,59 +207,31 @@ void FEditorFBXSceneViewWidget::RenderSummary() const
         ImGui::TextWrapped("File: %s", LoadedFilePath.c_str());
     }
 
-    int32 MeshCount = 0;
-    int32 SkeletonCount = 0;
-    int32 CameraCount = 0;
-    int32 LightCount = 0;
-    int32 NullCount = 0;
-
-    for (const FFBXSceneNode& Node : Snapshot.Nodes)
-    {
-        switch (Node.Type)
-        {
-        case EFBXSceneNodeType::Mesh:
-            ++MeshCount;
-            break;
-        case EFBXSceneNodeType::Skeleton:
-            ++SkeletonCount;
-            break;
-        case EFBXSceneNodeType::Camera:
-            ++CameraCount;
-            break;
-        case EFBXSceneNodeType::Light:
-            ++LightCount;
-            break;
-        case EFBXSceneNodeType::Null:
-            ++NullCount;
-            break;
-        default:
-            break;
-        }
-    }
-
-    ImGui::Text("Nodes: %d  Mesh: %d  Skeleton: %d  Camera: %d  Light: %d  Null: %d",
-                static_cast<int32>(Snapshot.Nodes.size()), MeshCount, SkeletonCount, CameraCount, LightCount, NullCount);
+    ImGui::Text("Nodes: %d  StaticMesh: %d  SkeletalMesh: %d",
+                static_cast<int32>(ImportScene.Nodes.size()),
+                static_cast<int32>(ImportScene.StaticMeshes.size()),
+                static_cast<int32>(ImportScene.SkeletalMeshes.size()));
 }
 
 void FEditorFBXSceneViewWidget::RenderTree()
 {
-    if (!Snapshot.IsValid())
+    if (ImportScene.Nodes.empty())
     {
-        ImGui::TextDisabled("Open an FBX file to inspect its scene tree.");
+        ImGui::TextDisabled("Open an FBX file to inspect imported meshes.");
         return;
     }
 
-    RenderNodeRecursive(Snapshot.RootIndex);
+    RenderNodeRecursive(0);
 }
 
 void FEditorFBXSceneViewWidget::RenderNodeRecursive(int32 NodeIndex)
 {
-    if (NodeIndex < 0 || NodeIndex >= static_cast<int32>(Snapshot.Nodes.size()))
+    if (NodeIndex < 0 || NodeIndex >= static_cast<int32>(ImportScene.Nodes.size()))
     {
         return;
     }
 
-    const FFBXSceneNode& Node = Snapshot.Nodes[NodeIndex];
+    const FFBXImportNode& Node = ImportScene.Nodes[NodeIndex];
     ImGui::PushID(NodeIndex);
 
     ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -262,13 +243,13 @@ void FEditorFBXSceneViewWidget::RenderNodeRecursive(int32 NodeIndex)
     {
         Flags |= ImGuiTreeNodeFlags_Selected;
     }
-    if (bAutoExpand && NodeIndex == Snapshot.RootIndex)
+    if (bAutoExpand && NodeIndex == 0)
     {
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Text, GetNodeTypeColor(Node.Type));
-    const bool bOpen = ImGui::TreeNodeEx("##Node", Flags, "[%s] %s", GetNodeTypeName(Node.Type), Node.Name.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, GetImportNodeTypeColor(Node));
+    const bool bOpen = ImGui::TreeNodeEx("##Node", Flags, "[%s] %s", GetImportNodeTypeName(Node), Node.Name.c_str());
     ImGui::PopStyleColor();
 
     if (ImGui::IsItemClicked())
@@ -293,34 +274,125 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
     ImGui::Text("Node Details");
     ImGui::Separator();
 
-    if (SelectedNodeIndex < 0 || SelectedNodeIndex >= static_cast<int32>(Snapshot.Nodes.size()))
+    if (SelectedNodeIndex < 0 || SelectedNodeIndex >= static_cast<int32>(ImportScene.Nodes.size()))
     {
         ImGui::TextDisabled("Select a node.");
         return;
     }
 
-    const FFBXSceneNode& Node = Snapshot.Nodes[SelectedNodeIndex];
-    const FVector Euler = Node.Rotation.Euler();
+    const FFBXImportNode& Node = ImportScene.Nodes[SelectedNodeIndex];
 
     ImGui::Text("Index: %d", SelectedNodeIndex);
     ImGui::Text("Name: %s", Node.Name.c_str());
-    ImGui::TextColored(GetNodeTypeColor(Node.Type), "Type: %s", GetNodeTypeName(Node.Type));
-    ImGui::Text("Attribute: %s", Node.AttributeName.empty() ? "<None>" : Node.AttributeName.c_str());
+    ImGui::TextColored(GetImportNodeTypeColor(Node), "Type: %s", GetImportNodeTypeName(Node));
     ImGui::Text("Parent: %d", Node.ParentIndex);
     ImGui::Text("Children: %d", static_cast<int32>(Node.Children.size()));
+    ImGui::Text("StaticMeshIndex: %d", Node.StaticMeshIndex);
+    ImGui::Text("SkeletalMeshIndex: %d", Node.SkeletalMeshIndex);
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Text("Local Transform");
-    ImGui::Text("T: %.3f, %.3f, %.3f", Node.Translation.X, Node.Translation.Y, Node.Translation.Z);
-    ImGui::Text("R: %.3f, %.3f, %.3f", Euler.X, Euler.Y, Euler.Z);
-    ImGui::Text("S: %.3f, %.3f, %.3f", Node.Scale.X, Node.Scale.Y, Node.Scale.Z);
+    if (Node.StaticMeshIndex >= 0 && Node.StaticMeshIndex < static_cast<int32>(ImportScene.StaticMeshes.size()))
+    {
+        const FFBXStaticMeshImportData& Mesh = ImportScene.StaticMeshes[Node.StaticMeshIndex];
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("Static Mesh");
+        ImGui::Text("Name: %s", Mesh.Name.c_str());
+        ImGui::Text("Vertices: %d", static_cast<int32>(Mesh.Vertices.size()));
+        ImGui::Text("Indices: %d", static_cast<int32>(Mesh.Indices.size()));
+        ImGui::Text("Sections: %d", static_cast<int32>(Mesh.Sections.size()));
+        ImGui::Text("Material Slots: %d", static_cast<int32>(Mesh.MatreialSlots.size()));
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Text("Quaternion");
-    ImGui::Text("X: %.4f", Node.Rotation.X);
-    ImGui::Text("Y: %.4f", Node.Rotation.Y);
-    ImGui::Text("Z: %.4f", Node.Rotation.Z);
-    ImGui::Text("W: %.4f", Node.Rotation.W);
+        if (ImGui::TreeNode("Sections"))
+        {
+            for (int32 SectionIndex = 0; SectionIndex < static_cast<int32>(Mesh.Sections.size()); ++SectionIndex)
+            {
+                const FStaticMeshSection& Section = Mesh.Sections[SectionIndex];
+                ImGui::Text("#%d Start=%u Count=%u Slot=%d",
+                            SectionIndex, Section.StartIndex, Section.IndexCount, Section.MaterialSlotIndex);
+            }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Material Slots"))
+        {
+            for (int32 SlotIndex = 0; SlotIndex < static_cast<int32>(Mesh.MatreialSlots.size()); ++SlotIndex)
+            {
+                const FStaticMeshMaterialSlot& Slot = Mesh.MatreialSlots[SlotIndex];
+                ImGui::Text("#%d %s", SlotIndex, Slot.SlotName.c_str());
+            }
+            ImGui::TreePop();
+        }
+    }
+
+    if (Node.SkeletalMeshIndex >= 0 && Node.SkeletalMeshIndex < static_cast<int32>(ImportScene.SkeletalMeshes.size()))
+    {
+        const FFBXSkeletalMeshImportData& Mesh = ImportScene.SkeletalMeshes[Node.SkeletalMeshIndex];
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("Skeletal Mesh");
+        ImGui::Text("Name: %s", Mesh.Name.c_str());
+        ImGui::Text("Skin Deformers: %d", Mesh.SkinDeformerCount);
+        ImGui::Text("Control Points: %d", Mesh.ControlPointCount);
+        ImGui::Text("Polygons: %d", Mesh.PolygonCount);
+    }
+}
+
+void FEditorFBXSceneViewWidget::SpawnImportedStaticMeshes()
+{
+    if (ImportScene.StaticMeshes.empty())
+    {
+        StatusMessage = "No static mesh import data to spawn.";
+        return;
+    }
+
+    UWorld* World = GEngine ? GEngine->GetWorld() : nullptr;
+    if (World == nullptr)
+    {
+        StatusMessage = "Failed to spawn FBX static meshes. World is null.";
+        return;
+    }
+
+    FFBXImporter Importer;
+    int32 SpawnedCount = 0;
+
+    for (const FFBXStaticMeshImportData& MeshData : ImportScene.StaticMeshes)
+    {
+        if (MeshData.Vertices.empty() || MeshData.Indices.empty())
+        {
+            continue;
+        }
+
+        FStaticMesh* RawMesh = Importer.CreateStaticMeshFromImportData(MeshData);
+        if (RawMesh == nullptr)
+        {
+            continue;
+        }
+
+        UStaticMesh* StaticMeshAsset = UObjectManager::Get().CreateObject<UStaticMesh>();
+        StaticMeshAsset->SetMeshData(RawMesh);
+
+        AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
+        Actor->SetFName(FName((FString("FBX_") + MeshData.Name).c_str()));
+
+        UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Actor->GetRootComponent());
+        if (MeshComponent == nullptr)
+        {
+            MeshComponent = Actor->AddComponent<UStaticMeshComponent>();
+            Actor->SetRootComponent(MeshComponent);
+        }
+
+        MeshComponent->SetStaticMesh(StaticMeshAsset);
+
+        if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
+        {
+            ApplyImportNodeTransform(Actor, ImportScene.Nodes[MeshData.SourceNodeIndex]);
+        }
+
+        ++SpawnedCount;
+    }
+
+    World->RebuildSpatialIndex();
+    StatusMessage = SpawnedCount > 0
+        ? FString("Spawned ") + std::to_string(SpawnedCount) + " FBX static mesh actor(s)."
+        : FString("No valid static mesh data was spawned.");
 }

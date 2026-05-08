@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Editor/UI/EditorWidget.h"
-#include "Asset/FBX/FBXSceneTypes.h"
+#include "Asset/FBX/FBXImporter.h"
 #include "Core/Containers/String.h"
 
 class FEditorFBXSceneViewWidget : public FEditorWidget
@@ -17,9 +17,10 @@ private:
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);
     void RenderDetails() const;
+    void SpawnImportedStaticMeshes();
 
 private:
-    FFBXSceneSnapShot Snapshot;
+    FFBXImportScene ImportScene;
     FString LoadedFilePath;
     FString StatusMessage = "No FBX loaded.";
     int32 SelectedNodeIndex = -1;
