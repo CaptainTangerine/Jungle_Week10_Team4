@@ -385,6 +385,7 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FBX\FbxImporter.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FbxManagerWrapper.cpp" />
     <ClCompile Include="Source\Engine\Core\SoundManager.cpp" />
     <ClCompile Include="Source\Engine\Core\TimeManager.cpp" />
@@ -796,6 +797,7 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Engine\Asset\FBX\FbxImporter.h" />
     <ClInclude Include="Source\Engine\Asset\FBX\FbxManagerWrapper.h" />
     <ClInclude Include="Source\Engine\Core\SoundManager.h" />
     <ClInclude Include="Source\Engine\Core\TimeManager.h" />

@@ -916,6 +916,7 @@
     <ClCompile Include="Source\Engine\DriftSalvage\ExplosionSystem.cpp" />
     <ClCompile Include="Source\Engine\Render\RingBatcher.cpp" />
     <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FBX\FbxImporter.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FbxManagerWrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -1742,6 +1743,7 @@
     <ClInclude Include="Source\Engine\DriftSalvage\ExplosionSystem.h" />
     <ClInclude Include="Source\Engine\Render\RingBatcher.h" />
     <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.h" />
+    <ClInclude Include="Source\Engine\Asset\FBX\FbxImporter.h" />
     <ClInclude Include="Source\Engine\Asset\FBX\FbxManagerWrapper.h" />
   </ItemGroup>
 </Project>
