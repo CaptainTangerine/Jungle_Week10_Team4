@@ -2,6 +2,8 @@
 
 #include "Render/Resource/VertexTypes.h"
 
+class UMaterialInterface;
+
 struct FBone
 {
     std::string Name;
@@ -15,6 +17,7 @@ struct FBone
     FMatrix BoneToGlobalBind;
     // Bind pose 시점의 Mesh Local -> Bone Local 변환.
     FMatrix MeshToBoneBind;
+    bool bHasClusterBind = false;
 };
 
 struct FSKeletalMeshSection
@@ -27,6 +30,7 @@ struct FSKeletalMeshSection
 struct FSkeletalMeshMaterialSlot
 {
     FString SlotName;
+    UMaterialInterface* Material = nullptr;
 };
 
 

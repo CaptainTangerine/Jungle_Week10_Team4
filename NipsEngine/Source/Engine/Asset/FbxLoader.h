@@ -4,6 +4,9 @@
 #include "Object/FName.h"
 #include "SkeletalMeshTypes.h"
 
+class UMaterial;
+class UMaterialInterface;
+
 class FFbxLoader :public IAssetLoader
 {
 private:
@@ -15,21 +18,14 @@ private:
     struct FParseContext
     {
         FSkeletalMeshAsset Asset;
+        FString SourceFilePath;
+        FString SourceDirectory;
         
         TArray<FbxNode*> MeshNodes;
         TSet<FbxNode*> RequiredBoneNodes;
         TMap<FbxNode*, uint32> BoneNodeToIndex;
         TMap<FbxMesh*, TMap<uint32, TArray<FBoneInfluence>>> ControlPointWeights;
         TMap<FbxNode*, int32> MeshNodeToMaterialSlotBaseIndex;
-        
-        //EvaluateGlobalTransform()도 Local -> global
-        //Cluster->GetTransformLinkMatrix()도 Local -> global
-        
-        //이 node는 Cluster가 준 행렬이 있으니 parent * local로 덮어쓰면 안 됨
-        TSet<FbxNode*> ClusterBoneNodes;
-        
-        //그럼 둘중 어떤 Local->global을 쓸거냐 쓸 Local->global이 Value에 들어있음
-        TMap<FbxNode*, FbxAMatrix> CorrectedNodeGlobalMatrices;
     };
     
 public:
@@ -55,9 +51,15 @@ private:
     void CollectRequiredDescendantNodes(FParseContext& Context);
     bool CollectRequiredDescendantNodesRecursive(FbxNode* Node, FParseContext& Context);
     bool ShouldImportNodeAsBone(FbxNode* Node) const;
+    UMaterialInterface* ImportFbxMaterial(FbxSurfaceMaterial* Material, const FParseContext& Context) const;
+    FString FindFbxTexturePath(FbxSurfaceMaterial* Material, const char* PropertyName, const FParseContext& Context) const;
+    FString ResolveFbxTexturePath(const char* TexturePath, const FParseContext& Context) const;
+    void ApplyMaterialParams(UMaterial* Material) const;
     void CollectClusterData(FParseContext& Context);
-    void RebuildDerivedGlobalBindTransforms(FbxNode* Node, FParseContext& Context, const FbxAMatrix& ParentGlobalMatrix, bool bHasParentGlobalMatrix);
+    void RebuildNonClusterBoneGlobals(FParseContext& Context);
     bool ImportMeshGeometry(FParseContext& Context);
+    bool TryGetRigidSkinBoneIndex(FbxNode* MeshNode, const FParseContext& Context, int32& OutBoneIndex) const;
+    void FillVertexBoneWeights(FbxMesh* Mesh, uint32 ControlPointIndex, const FParseContext& Context, FbxVertex& Vertex) const;
     
     bool PrepareTraverse(FbxScene* Scene);
     bool LoadScene(const char* FilePath,FbxScene*& InOutScene);

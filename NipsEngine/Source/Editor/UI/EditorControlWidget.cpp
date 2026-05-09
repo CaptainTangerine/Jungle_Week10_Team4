@@ -102,6 +102,7 @@ namespace
             {
                 FStaticMeshMaterialSlot Slot = {};
                 Slot.SlotName = SourceSlot.SlotName;
+                Slot.Material = SourceSlot.Material;
                 PreviewMesh->Slots.push_back(Slot);
             }
         }
@@ -440,11 +441,13 @@ void FEditorControlWidget::Render(float DeltaTime)
                     {
                         SkeletalMeshComponent->SetSkeletalMesh(PreviewMesh);
 
-                        const int32 MaterialSlotCount = static_cast<int32>(PreviewMesh->GetMaterialSlots().size());
+                        const TArray<FSkeletalMeshMaterialSlot>& MaterialSlots = PreviewMesh->GetMaterialSlots();
+                        const int32 MaterialSlotCount = static_cast<int32>(MaterialSlots.size());
                         UMaterialInterface* DefaultMaterial = FResourceManager::Get().GetMaterial("DefaultWhite");
                         for (int32 SlotIndex = 0; SlotIndex < MaterialSlotCount; ++SlotIndex)
                         {
-                            SkeletalMeshComponent->SetMaterial(SlotIndex, DefaultMaterial);
+                            UMaterialInterface* SlotMaterial = MaterialSlots[SlotIndex].Material;
+                            SkeletalMeshComponent->SetMaterial(SlotIndex, SlotMaterial ? SlotMaterial : DefaultMaterial);
                         }
 
                         World->RebuildSpatialIndex();

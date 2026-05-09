@@ -692,12 +692,19 @@ void FPrimitiveRenderCollector::CollectFromComponent(
         if (!MeshBuffer) return;
 
         const TArray<FSKeletalMeshSection>& Sections = SkeletalMesh->GetSections();
+        const TArray<FSkeletalMeshMaterialSlot>& MaterialSlots = SkeletalMesh->GetMaterialSlots();
 
         for (int32 SectionIdx = 0; SectionIdx < static_cast<int32>(Sections.size()); ++SectionIdx)
         {
             const FSKeletalMeshSection& Section = Sections[SectionIdx];
             const int32 MaterialSlotIndex = Section.MaterialSlotIndex >= 0 ? Section.MaterialSlotIndex : SectionIdx;
             UMaterialInterface* Material = Cast<UMaterialInterface>(SkeletalMeshComp->GetMaterial(MaterialSlotIndex));
+            if (Material == nullptr &&
+                MaterialSlotIndex >= 0 &&
+                MaterialSlotIndex < static_cast<int32>(MaterialSlots.size()))
+            {
+                Material = MaterialSlots[MaterialSlotIndex].Material;
+            }
             if (Material == nullptr)
             {
                 Material = FResourceManager::Get().GetMaterial("DefaultWhite");
