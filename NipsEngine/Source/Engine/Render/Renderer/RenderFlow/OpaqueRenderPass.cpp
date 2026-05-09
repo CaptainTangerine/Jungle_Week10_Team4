@@ -6,7 +6,6 @@
 #include "Render/Common/WaterRenderingCommon.h"
 #include "Core/ResourceManager.h"
 #include "Core/Logging/Log.h"
-#include "Component/SkinnedMeshComponent.h"
 #include "SceneLightBinding.h"
 #include <cstring>
 
@@ -205,41 +204,20 @@ bool FOpaqueRenderPass::DrawCommand(const FRenderPassContext* Context)
             continue;
         }
 
+        if (Cmd.MeshBuffer == nullptr || !Cmd.MeshBuffer->IsValid())
+        {
+            return false;
+        }
+
         uint32 offset = 0;
-        ID3D11Buffer* vertexBuffer = nullptr;
-        ID3D11Buffer* indexBuffer = nullptr;
-        uint32 vertexCount = 0;
-        uint32 stride = 0;
-
-        if (Cmd.SkinnedMeshRenderResource != nullptr)
-        {
-            // Skinned mesh commands carry their own render resource. The
-            // pipeline prepare step has already initialized and uploaded the
-            // dynamic VB before this pass begins.
-            FSkinnedMeshRenderResource* SkinnedResource = Cmd.SkinnedMeshRenderResource;
-            vertexBuffer = SkinnedResource->DynamicSkinnedVertexBuffer.GetBuffer();
-            indexBuffer = SkinnedResource->StaticIB.GetBuffer();
-            vertexCount = SkinnedResource->DynamicSkinnedVertexBuffer.GetVertexCount();
-            stride = SkinnedResource->DynamicSkinnedVertexBuffer.GetStride();
-        }
-        else
-        {
-            if (Cmd.MeshBuffer == nullptr || !Cmd.MeshBuffer->IsValid())
-            {
-                return false;
-            }
-
-            vertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
-            indexBuffer = Cmd.MeshBuffer->GetIndexBuffer().GetBuffer();
-            vertexCount = Cmd.MeshBuffer->GetVertexBuffer().GetVertexCount();
-            stride = Cmd.MeshBuffer->GetVertexBuffer().GetStride();
-        }
-
+        ID3D11Buffer* vertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
         if (vertexBuffer == nullptr)
         {
             return false;
         }
 
+        uint32 vertexCount = Cmd.MeshBuffer->GetVertexBuffer().GetVertexCount();
+        uint32 stride = Cmd.MeshBuffer->GetVertexBuffer().GetStride();
         if (vertexCount == 0 || stride == 0)
         {
             return false;
@@ -292,6 +270,7 @@ bool FOpaqueRenderPass::DrawCommand(const FRenderPassContext* Context)
 
         Context->DeviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
 
+        ID3D11Buffer* indexBuffer = Cmd.MeshBuffer->GetIndexBuffer().GetBuffer();
         if (indexBuffer != nullptr)
         {
             uint32 indexStart = Cmd.SectionIndexStart;

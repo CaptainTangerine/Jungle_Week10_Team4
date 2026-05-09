@@ -6,7 +6,6 @@
 #include "Component/PrimitiveComponent.h"
 #include "Component/SkyAtmosphereComponent.h"
 #include "Component/ShapeComponent.h"
-#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -606,53 +605,6 @@ void FPrimitiveRenderCollector::CollectFromComponent(
 
                 RenderBus.AddCommand(ERenderPass::ToonOutline, OutlineCmd);
             }
-        }
-
-        break;
-    }
-
-    case EPrimitiveType::EPT_SkinnedMesh:
-    {
-        if (!ShowFlags.bPrimitives) return;
-
-        USkinnedMeshComponent* SkinnedMeshComp = static_cast<USkinnedMeshComponent*>(Primitive);
-        USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
-        if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData())
-        {
-            return;
-        }
-
-        const TArray<FSkeletalMeshSection>& Sections = SkeletalMesh->GetSections();
-        if (Sections.empty())
-        {
-            return;
-        }
-
-        for (int32 SectionIdx = 0; SectionIdx < static_cast<int32>(Sections.size()); ++SectionIdx)
-        {
-            const FSkeletalMeshSection& Section = Sections[SectionIdx];
-            UMaterialInterface* Material = Cast<UMaterialInterface>(SkinnedMeshComp->GetMaterial(SectionIdx));
-            if (Material == nullptr)
-            {
-                Material = FResourceManager::Get().GetMaterial("DefaultWhite");
-                if (Material == nullptr)
-                {
-                    continue;
-                }
-            }
-
-            FRenderCommand Cmd = {};
-            Cmd.Type = ERenderCommandType::SkinnedMesh;
-            Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
-            Cmd.SkinnedMeshRenderResource = &SkinnedMeshComp->GetSkinnedMeshRenderResource();
-            Cmd.SectionIndexStart = Section.StartIndex;
-            Cmd.SectionIndexCount = Section.IndexCount;
-            Cmd.Material = Material;
-
-            // Skinned meshes do not use MeshBuffer. Their dynamic VB and static
-            // IB are owned by FSkinnedMeshRenderResource and prepared before
-            // the render pass loop starts.
-            RenderBus.AddCommand(ERenderPass::Opaque, Cmd);
         }
 
         break;

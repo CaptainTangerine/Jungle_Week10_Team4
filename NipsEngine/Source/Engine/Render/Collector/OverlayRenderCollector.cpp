@@ -3,7 +3,6 @@
 #include "Component/BillboardComponent.h"
 #include "Component/GizmoComponent.h"
 #include "Component/PrimitiveComponent.h"
-#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -228,18 +227,6 @@ bool FOverlayRenderCollector::CollectFromSelectedActor(
         {
             auto* StaticMeshComp = static_cast<UStaticMeshComponent*>(primitiveComponent);
             MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMeshComp->GetStaticMesh());
-        }
-        else if (primitiveComponent->GetPrimitiveType() == EPrimitiveType::EPT_SkinnedMesh)
-        {
-            // SelectionMaskRenderPass currently draws only FMeshBuffer-backed geometry.
-            // Skinned meshes use their own dynamic resource path, so skip the mask until
-            // that pass supports FSkinnedMeshRenderResource directly.
-            if (ShowFlags.bBoundingVolume && LineBatcher != nullptr)
-            {
-                LineBatcher->AddAABB(BuildRenderAABB(primitiveComponent, RenderBus), FColor::White());
-            }
-            CollectBVHInternalNodeAABBs(primitiveComponent, ShowFlags, RenderBus, LineBatcher, SeenBVHNodeIndices);
-            continue;
         }
         else
         {

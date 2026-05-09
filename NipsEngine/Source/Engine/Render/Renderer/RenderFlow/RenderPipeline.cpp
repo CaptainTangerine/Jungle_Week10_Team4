@@ -25,14 +25,10 @@
 #include "ToonOutlineRenderPass.h"
 #include "Core/Logging/Log.h"
 #include "UIRenderPass.h"
-#include "Component/SkinnedMeshComponent.h"
-#include "Render/Scene/RenderBus.h"
-#include "Render/Scene/RenderCommand.h"
 
 #include <algorithm>
 #include <cwctype>
 #include <filesystem>
-#include <unordered_set>
 
 namespace
 {
@@ -217,11 +213,6 @@ bool FRenderPipeline::Render(const FRenderPassContext* Context)
     OutSRV = nullptr;
     OutRTV = nullptr;
 
-    // Skinned mesh buffers must be prepared before any render pass runs.
-    // Shadow and depth prepass are executed before the opaque pass, so lazy
-    // initialization inside FOpaqueRenderPass would be too late for those passes.
-    PrepareSkinnedMeshRenderResources(Context);
-
     for (std::shared_ptr<FBaseRenderPass> Pass : RenderPasses)
     {
         if (Context && Context->RenderBus && !Context->RenderBus->GetShowFlags().bShadow && (Pass == ShadowPass || Pass == BlurPass)) continue;
@@ -238,84 +229,6 @@ bool FRenderPipeline::Render(const FRenderPassContext* Context)
     Context->RenderTargets->FinalRTV = OutRTV;
 
     return true;
-}
-
-void FRenderPipeline::PrepareSkinnedMeshRenderResources(const FRenderPassContext* Context)
-{
-    if (Context == nullptr ||
-        Context->RenderBus == nullptr ||
-        Context->Device == nullptr ||
-        Context->DeviceContext == nullptr)
-    {
-        return;
-    }
-
-    std::unordered_set<FSkinnedMeshRenderResource*> PreparedResources;
-
-    for (uint32 PassIndex = 0; PassIndex < static_cast<uint32>(ERenderPass::MAX); ++PassIndex)
-    {
-        const ERenderPass PassType = static_cast<ERenderPass>(PassIndex);
-        const TArray<FRenderCommand>& Commands = Context->RenderBus->GetCommands(PassType);
-
-        for (const FRenderCommand& Cmd : Commands)
-        {
-            if (Cmd.Type != ERenderCommandType::SkinnedMesh)
-            {
-                continue;
-            }
-
-            FSkinnedMeshRenderResource* Resource = Cmd.SkinnedMeshRenderResource;
-            if (Resource == nullptr)
-            {
-                continue;
-            }
-
-            // The same skinned mesh can be submitted to multiple passes in one
-            // frame. Prepare and upload it once so all passes consume identical
-            // vertex data for this frame.
-            if (!PreparedResources.insert(Resource).second)
-            {
-                continue;
-            }
-
-            PrepareSkinnedMeshRenderCommand(Context, Cmd);
-        }
-    }
-}
-
-void FRenderPipeline::PrepareSkinnedMeshRenderCommand(const FRenderPassContext* Context, const FRenderCommand& Cmd)
-{
-    if (Cmd.Type != ERenderCommandType::SkinnedMesh)
-    {
-        return;
-    }
-
-    FSkinnedMeshRenderResource* Resource = Cmd.SkinnedMeshRenderResource;
-
-    // Resource가 없거나 CPU 데이터가 비어있으면 스킵한다.
-    // SkinnedVertices / IndexData는 SetSkeletalMesh 시점에 InitializeFromBindPose로
-    // 미리 채워지므로, 여기서 USkeletalMesh 포인터를 역참조하지 않는다.
-    // raw 포인터를 렌더 커맨드나 Resource에 보관하면 GC / 오브젝트 수명에 따라
-    // 댕글링이 발생하므로, Resource 내부 데이터만 사용한다.
-    if (Resource == nullptr ||
-        Resource->SkinnedVertices.empty() ||
-        Resource->IndexData.empty())
-    {
-        return;
-    }
-
-    const uint32 VertexCount = static_cast<uint32>(Resource->SkinnedVertices.size());
-    if (!Resource->EnsureDynamicVertexBuffer(Context->Device, VertexCount))
-    {
-        return;
-    }
-
-    if (!Resource->EnsureStaticIndexBuffer(Context->Device))
-    {
-        return;
-    }
-
-    Resource->Upload(Context->DeviceContext);
 }
 
 void FRenderPipeline::Release()
