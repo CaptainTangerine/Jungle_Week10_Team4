@@ -17,6 +17,7 @@
 #include "GameFramework/Actor.h"
 #include "Component/CameraComponent.h"
 #include "Component/Script/LuaScriptPathUtils.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/ShapeComponent.h"
 #include "Component/GizmoComponent.h"
@@ -36,6 +37,7 @@ namespace
 
     constexpr uint32 PropIdTexturePath = PropertyNameIdConstexpr("Texture Path");
     constexpr uint32 PropIdStaticMesh = PropertyNameIdConstexpr("StaticMesh");
+    constexpr uint32 PropIdSkeletalMesh = PropertyNameIdConstexpr("SkeletalMesh");
     constexpr uint32 PropIdScriptPath = PropertyNameIdConstexpr("Script Path");
     constexpr uint32 PropIdFont = PropertyNameIdConstexpr("Font");
     constexpr uint32 PropIdParticle = PropertyNameIdConstexpr("Particle");
@@ -67,6 +69,8 @@ namespace
             return FResourceManager::Get().GetTextureFilePath();
         case PropIdStaticMesh:
             return FResourceManager::Get().GetStaticMeshPaths();
+        case PropIdSkeletalMesh:
+            return FResourceManager::Get().GetSkeletalMeshPaths();
         case PropIdScriptPath:
             return EditorEngine ? EditorEngine->GetLuaScriptSubsystem().GetAvailableScriptPaths() : TArray<FString>{};
         default:
@@ -169,7 +173,7 @@ void FEditorPropertyWidget::UpdateSelectionState(AActor* PrimaryActor)
         LastSelectedActor = PrimaryActor;
 
         USceneComponent* RootComp = PrimaryActor->GetRootComponent();
-        if (RootComp && RootComp->IsA<UStaticMeshComponent>())
+        if (RootComp && (RootComp->IsA<UStaticMeshComponent>() || RootComp->IsA<USkeletalMeshComponent>()))
         {
             SelectedComponent = RootComp;
             bActorSelected = false;

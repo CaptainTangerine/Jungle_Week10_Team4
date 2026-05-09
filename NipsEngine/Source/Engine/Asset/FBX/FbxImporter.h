@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <fbxsdk.h>
 
@@ -56,14 +56,16 @@ private:
 
     struct FControlPointSkinData
     {
-        TArray<FBoneWeightPair> Influences;
+        TArray<FBoneWeightPair> Influences; // 컨트로 포인트가 영향을 받는 뼈의 리스트
     };
 
     void ProcessNode(FbxNode* Node, FStaticMesh& OutStaticMesh);
     void ProcessMesh(FbxNode* Node, FbxMesh* Mesh, FStaticMesh& OutStaticMesh);
     void ProcessSkeletonNode(FbxNode* Node, int32 ParentIndex, FSkeletalMesh& OutSkeletalMesh);
+    void CollectSkinBindPoses(FbxNode* Node, FSkeletalMesh& OutSkeletalMesh);
     void ProcessSkeletalNode(FbxNode* Node, FSkeletalMesh& OutSkeletalMesh);
     void ProcessSkeletalMesh(FbxNode* Node, FbxMesh* Mesh, FSkeletalMesh& OutSkeletalMesh);
+    FbxAMatrix ResolveSkeletalMeshBindTransform(FbxNode* Node, FbxMesh* Mesh, bool bHasAnySkinInfluence) const;
 
     uint32 AddPolygonVertex(
         FbxMesh* Mesh,
@@ -75,17 +77,24 @@ private:
 
     uint32 AddSkeletalPolygonVertex(
         FbxMesh* Mesh,
-        const FbxAMatrix& NodeTransform,
+        const FbxAMatrix& MeshBindTransform,
         const char* UVSetName,
         int32 PolygonIndex,
         int32 VertexInPolygon,
         const TArray<FControlPointSkinData>& ControlPointSkinData,
+        int32 FallbackBoneIndex,
         FSkeletalMesh& OutSkeletalMesh);
 
     uint32 GetOrCreateVertexIndex(const FNormalVertex& Vertex, FStaticMesh& OutStaticMesh);
     uint32 GetOrCreateSkeletalVertexIndex(const FSkeletalVertex& Vertex, FSkeletalMesh& OutSkeletalMesh);
     uint32 GetOrCreateBoneIndex(FbxNode* BoneNode, FSkeletalMesh& OutSkeletalMesh);
-    void SetBoneGlobalBindPose(FbxNode* BoneNode, const FMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh);
+    FbxNode* FindClosestParentBoneNode(FbxNode* Node) const;
+    int32 ResolveRigidSkinBoneIndex(
+        FbxNode* Node,
+        FbxMesh* Mesh,
+        const FbxAMatrix& MeshBindTransform,
+        const FSkeletalMesh& OutSkeletalMesh) const;
+    void SetBoneGlobalBindPose(FbxNode* BoneNode, const FbxAMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh);
     void RefreshBoneLocalBindPoses(FSkeletalMesh& OutSkeletalMesh);
     TArray<FControlPointSkinData> BuildControlPointSkinData(FbxMesh* Mesh, FSkeletalMesh& OutSkeletalMesh);
     void NormalizeControlPointSkinData(TArray<FControlPointSkinData>& ControlPointSkinData) const;
@@ -104,4 +113,5 @@ private:
     TMap<FSkeletalVertexKey, uint32, FSkeletalVertexKeyHasher> UniqueSkeletalVertices;
     TMap<FbxNode*, uint32> BoneIndexByNode;
     TMap<FbxNode*, FMatrix> BoneGlobalBindPoseByNode;
+    TMap<FbxNode*, FbxAMatrix> BoneGlobalBindPoseFbxByNode;
 };

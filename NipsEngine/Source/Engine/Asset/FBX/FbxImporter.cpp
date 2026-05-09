@@ -1,10 +1,11 @@
-#include "FbxImporter.h"
+﻿#include "FbxImporter.h"
 
 #include "Asset/SkeletalMesh.h"
 #include "Math/Utils.h"
 #include "Object/Object.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -66,6 +67,47 @@ namespace
         return FbxAMatrix(Translation, Rotation, Scaling);
     }
 
+    FbxAMatrix GetSkeletalMeshBindTransform(FbxNode* Node, FbxMesh* Mesh)
+    {
+        FbxAMatrix MeshBindTransform;
+        MeshBindTransform.SetIdentity();
+
+        bool bFoundSkinBindTransform = false;
+        if (Mesh != nullptr)
+        {
+            const int32 SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
+            for (int32 SkinIndex = 0; SkinIndex < SkinCount && !bFoundSkinBindTransform; ++SkinIndex)
+            {
+                FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(SkinIndex, FbxDeformer::eSkin));
+                if (Skin == nullptr)
+                {
+                    continue;
+                }
+
+                const int32 ClusterCount = Skin->GetClusterCount();
+                for (int32 ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex)
+                {
+                    FbxCluster* Cluster = Skin->GetCluster(ClusterIndex);
+                    if (Cluster == nullptr)
+                    {
+                        continue;
+                    }
+
+                    Cluster->GetTransformMatrix(MeshBindTransform);
+                    bFoundSkinBindTransform = true;
+                    break;
+                }
+            }
+        }
+
+        if (!bFoundSkinBindTransform && Node != nullptr)
+        {
+            MeshBindTransform = Node->EvaluateGlobalTransform();
+        }
+
+        return MeshBindTransform * GetGeometryTransform(Node);
+    }
+
     void BuildFallbackBasis(const FVector& InNormal, FVector& OutTangent, FVector& OutBitangent)
     {
         FVector Normal = InNormal.GetSafeNormal();
@@ -109,7 +151,7 @@ bool FFbxImporter::FSkeletalVertexKey::operator==(const FSkeletalVertexKey& Othe
 }
 
 size_t FFbxImporter::FSkeletalVertexKeyHasher::operator()(const FSkeletalVertexKey& Key) const noexcept
-{
+{   
     size_t Seed = 0;
     HashCombine(Seed, std::hash<FVector>{}(Key.Position));
     HashCombine(Seed, std::hash<FVector>{}(Key.Normal));
@@ -191,6 +233,7 @@ bool FFbxImporter::ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeleta
     UniqueSkeletalVertices.clear();
     BoneIndexByNode.clear();
     BoneGlobalBindPoseByNode.clear();
+    BoneGlobalBindPoseFbxByNode.clear();
 
     if (Scene == nullptr || Scene->GetRootNode() == nullptr)
     {
@@ -198,6 +241,7 @@ bool FFbxImporter::ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeleta
     }
 
     ProcessSkeletonNode(Scene->GetRootNode(), -1, OutSkeletalMesh);
+    CollectSkinBindPoses(Scene->GetRootNode(), OutSkeletalMesh);
     if (OutSkeletalMesh.Bones.empty())
     {
         FSkeletonBone RootBone = {};
@@ -261,6 +305,48 @@ void FFbxImporter::ProcessSkeletonNode(FbxNode* Node, int32 ParentIndex, FSkelet
     for (int32 ChildIndex = 0; ChildIndex < ChildCount; ++ChildIndex)
     {
         ProcessSkeletonNode(Node->GetChild(ChildIndex), CurrentParentIndex, OutSkeletalMesh);
+    }
+}
+
+void FFbxImporter::CollectSkinBindPoses(FbxNode* Node, FSkeletalMesh& OutSkeletalMesh)
+{
+    if (Node == nullptr)
+    {
+        return;
+    }
+
+    FbxMesh* Mesh = Node->GetMesh();
+    if (Mesh != nullptr)
+    {
+        const int32 SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
+        for (int32 SkinIndex = 0; SkinIndex < SkinCount; ++SkinIndex)
+        {
+            FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(SkinIndex, FbxDeformer::eSkin));
+            if (Skin == nullptr)
+            {
+                continue;
+            }
+
+            const int32 ClusterCount = Skin->GetClusterCount();
+            for (int32 ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex)
+            {
+                FbxCluster* Cluster = Skin->GetCluster(ClusterIndex);
+                if (Cluster == nullptr || Cluster->GetLink() == nullptr)
+                {
+                    continue;
+                }
+
+                FbxAMatrix LinkBindMatrix;
+                Cluster->GetTransformLinkMatrix(LinkBindMatrix);
+                SetBoneGlobalBindPose(Cluster->GetLink(), LinkBindMatrix, OutSkeletalMesh);
+            }
+        }
+    }
+
+    const int32 ChildCount = Node->GetChildCount();
+    for (int32 ChildIndex = 0; ChildIndex < ChildCount; ++ChildIndex)
+    {
+        CollectSkinBindPoses(Node->GetChild(ChildIndex), OutSkeletalMesh);
     }
 }
 
@@ -328,17 +414,29 @@ void FFbxImporter::ProcessSkeletalMesh(FbxNode* Node, FbxMesh* Mesh, FSkeletalMe
     }
 
     FbxStringList UVSetNameList;
-    Mesh->GetUVSetNames(UVSetNameList);
-    const char* UVSetName = UVSetNameList.GetCount() > 0 ? UVSetNameList.GetStringAt(0) : nullptr;
+    Mesh->GetUVSetNames(UVSetNameList); // 메시에서 UV 세트 이름을 가져옴. 메시에는 여러 UV 세트가 있을 수 있으므로, 첫 번째 UV 세트를 사용하기 위해 이름을 가져옴.
+    const char* UVSetName = UVSetNameList.GetCount() > 0 ? UVSetNameList.GetStringAt(0) : nullptr; // UV 세트가 하나라도 있으면 첫 번째 UV 세트 이름을 사용하고
 
-    const FbxAMatrix NodeTransform = Node->EvaluateGlobalTransform();
-    const FbxAMatrix MeshTransform = NodeTransform * GetGeometryTransform(Node);
-    const TArray<FControlPointSkinData> ControlPointSkinData = BuildControlPointSkinData(Mesh, OutSkeletalMesh);
-    const int32 PolygonCount = Mesh->GetPolygonCount();
-
-    for (int32 PolygonIndex = 0; PolygonIndex < PolygonCount; ++PolygonIndex)
+    const TArray<FControlPointSkinData> ControlPointSkinData = BuildControlPointSkinData(Mesh, OutSkeletalMesh); // 컨트롤 포인트의 스킨 데이터를 생성
+    bool bHasAnySkinInfluence = false;
+    for (const FControlPointSkinData& SkinData : ControlPointSkinData)
     {
-        const int32 PolygonSize = Mesh->GetPolygonSize(PolygonIndex);
+        if (!SkinData.Influences.empty())
+        {
+            bHasAnySkinInfluence = true;
+            break;
+        }
+    }
+
+    const FbxAMatrix MeshBindTransform = ResolveSkeletalMeshBindTransform(Node, Mesh, bHasAnySkinInfluence);
+    const int32 FallbackBoneIndex = bHasAnySkinInfluence
+        ? 0
+        : ResolveRigidSkinBoneIndex(Node, Mesh, MeshBindTransform, OutSkeletalMesh);
+    const int32 PolygonCount = Mesh->GetPolygonCount(); // 메시를 구성하는 polygon의 개수
+
+    for (int32 PolygonIndex = 0; PolygonIndex < PolygonCount; ++PolygonIndex) // 모든 polygon에 대해서 반복
+    {
+        const int32 PolygonSize = Mesh->GetPolygonSize(PolygonIndex); // 현재 polygon의 vertex 개수
         if (PolygonSize < 3)
         {
             continue;
@@ -346,15 +444,44 @@ void FFbxImporter::ProcessSkeletalMesh(FbxNode* Node, FbxMesh* Mesh, FSkeletalMe
 
         for (int32 TriangleIndex = 0; TriangleIndex < PolygonSize - 2; ++TriangleIndex)
         {
-            const uint32 Index0 = AddSkeletalPolygonVertex(Mesh, MeshTransform, UVSetName, PolygonIndex, 0, ControlPointSkinData, OutSkeletalMesh);
-            const uint32 Index1 = AddSkeletalPolygonVertex(Mesh, MeshTransform, UVSetName, PolygonIndex, TriangleIndex + 1, ControlPointSkinData, OutSkeletalMesh);
-            const uint32 Index2 = AddSkeletalPolygonVertex(Mesh, MeshTransform, UVSetName, PolygonIndex, TriangleIndex + 2, ControlPointSkinData, OutSkeletalMesh);
+            const uint32 Index0 = AddSkeletalPolygonVertex(Mesh, MeshBindTransform, UVSetName, PolygonIndex, 0, ControlPointSkinData, FallbackBoneIndex, OutSkeletalMesh);
+            const uint32 Index1 = AddSkeletalPolygonVertex(Mesh, MeshBindTransform, UVSetName, PolygonIndex, TriangleIndex + 1, ControlPointSkinData, FallbackBoneIndex, OutSkeletalMesh);
+            const uint32 Index2 = AddSkeletalPolygonVertex(Mesh, MeshBindTransform, UVSetName, PolygonIndex, TriangleIndex + 2, ControlPointSkinData, FallbackBoneIndex, OutSkeletalMesh);
 
             OutSkeletalMesh.Indices.push_back(Index0);
-            OutSkeletalMesh.Indices.push_back(Index1);
             OutSkeletalMesh.Indices.push_back(Index2);
+            OutSkeletalMesh.Indices.push_back(Index1);
         }
     }
+}
+
+FbxAMatrix FFbxImporter::ResolveSkeletalMeshBindTransform(FbxNode* Node, FbxMesh* Mesh, bool bHasAnySkinInfluence) const
+{
+    if (Node == nullptr)
+    {
+        FbxAMatrix Identity;
+        Identity.SetIdentity();
+        return Identity;
+    }
+
+    if (bHasAnySkinInfluence)
+    {
+        return GetSkeletalMeshBindTransform(Node, Mesh);
+    }
+
+    FbxAMatrix MeshBindTransform = Node->EvaluateGlobalTransform();
+    FbxNode* ParentBoneNode = FindClosestParentBoneNode(Node);
+    auto ParentBindIt = ParentBoneNode != nullptr
+        ? BoneGlobalBindPoseFbxByNode.find(ParentBoneNode)
+        : BoneGlobalBindPoseFbxByNode.end();
+    if (ParentBindIt != BoneGlobalBindPoseFbxByNode.end())
+    {
+        const FbxAMatrix ParentCurrentTransform = ParentBoneNode->EvaluateGlobalTransform();
+        const FbxAMatrix MeshRelativeToParentBone = ParentCurrentTransform.Inverse() * MeshBindTransform;
+        MeshBindTransform = ParentBindIt->second * MeshRelativeToParentBone;
+    }
+
+    return MeshBindTransform * GetGeometryTransform(Node);
 }
 
 uint32 FFbxImporter::AddPolygonVertex(
@@ -398,23 +525,24 @@ uint32 FFbxImporter::AddPolygonVertex(
 
 uint32 FFbxImporter::AddSkeletalPolygonVertex(
     FbxMesh* Mesh,
-    const FbxAMatrix& NodeTransform,
+    const FbxAMatrix& MeshBindTransform,
     const char* UVSetName,
     int32 PolygonIndex,
     int32 VertexInPolygon,
     const TArray<FControlPointSkinData>& ControlPointSkinData,
+    int32 FallbackBoneIndex,
     FSkeletalMesh& OutSkeletalMesh)
 {
     FSkeletalVertex Vertex = {};
 
     const int32 ControlPointIndex = Mesh->GetPolygonVertex(PolygonIndex, VertexInPolygon);
     const FbxVector4 FbxPosition = Mesh->GetControlPointAt(ControlPointIndex);
-    Vertex.Position = ToVector(NodeTransform.MultT(FbxPosition));
+    Vertex.Position = ToVector(MeshBindTransform.MultT(FbxPosition));
 
     FbxVector4 FbxNormal(0.0, 0.0, 1.0, 0.0);
     if (Mesh->GetPolygonVertexNormal(PolygonIndex, VertexInPolygon, FbxNormal))
     {
-        FbxNormal = NodeTransform.MultR(FbxNormal);
+        FbxNormal = MeshBindTransform.MultR(FbxNormal);
         FbxNormal.Normalize();
     }
     Vertex.Normal = ToVector(FbxNormal).GetSafeNormal();
@@ -446,11 +574,74 @@ uint32 FFbxImporter::AddSkeletalPolygonVertex(
 
     if (Vertex.BoneWeights[0] <= MathUtil::Epsilon && !OutSkeletalMesh.Bones.empty())
     {
-        Vertex.BoneIndices[0] = 0;
+        Vertex.BoneIndices[0] = FallbackBoneIndex >= 0
+            ? static_cast<uint32>(FallbackBoneIndex)
+            : 0;
         Vertex.BoneWeights[0] = 1.0f;
     }
 
     return GetOrCreateSkeletalVertexIndex(Vertex, OutSkeletalMesh);
+}
+
+int32 FFbxImporter::ResolveRigidSkinBoneIndex(
+    FbxNode* Node,
+    FbxMesh* Mesh,
+    const FbxAMatrix& MeshBindTransform,
+    const FSkeletalMesh& OutSkeletalMesh) const
+{
+    if (OutSkeletalMesh.Bones.empty())
+    {
+        return -1;
+    }
+
+    for (FbxNode* ParentNode = Node != nullptr ? Node->GetParent() : nullptr;
+         ParentNode != nullptr;
+         ParentNode = ParentNode->GetParent())
+    {
+        auto BoneIndexIt = BoneIndexByNode.find(ParentNode);
+        if (BoneIndexIt != BoneIndexByNode.end() &&
+            BoneIndexIt->second < OutSkeletalMesh.Bones.size())
+        {
+            return static_cast<int32>(BoneIndexIt->second);
+        }
+    }
+
+    FVector MeshCenter = ToMatrix(MeshBindTransform).GetOrigin();
+    const int32 ControlPointCount = Mesh != nullptr ? Mesh->GetControlPointsCount() : 0;
+    if (ControlPointCount > 0)
+    {
+        MeshCenter = FVector::ZeroVector;
+        for (int32 ControlPointIndex = 0; ControlPointIndex < ControlPointCount; ++ControlPointIndex)
+        {
+            MeshCenter += ToVector(MeshBindTransform.MultT(Mesh->GetControlPointAt(ControlPointIndex)));
+        }
+        MeshCenter *= 1.0f / static_cast<float>(ControlPointCount);
+    }
+
+    int32 BestBoneIndex = 0;
+    float BestDistanceSquared = std::numeric_limits<float>::max();
+    for (const auto& Pair : BoneIndexByNode)
+    {
+        if (Pair.first == nullptr || Pair.second >= OutSkeletalMesh.Bones.size())
+        {
+            continue;
+        }
+
+        auto GlobalBindPoseIt = BoneGlobalBindPoseByNode.find(Pair.first);
+        const FMatrix GlobalBindPose =
+            GlobalBindPoseIt != BoneGlobalBindPoseByNode.end()
+            ? GlobalBindPoseIt->second
+            : ToMatrix(Pair.first->EvaluateGlobalTransform());
+
+        const float DistanceSquared = FVector::DistSquared(MeshCenter, GlobalBindPose.GetOrigin());
+        if (DistanceSquared < BestDistanceSquared)
+        {
+            BestDistanceSquared = DistanceSquared;
+            BestBoneIndex = static_cast<int32>(Pair.second);
+        }
+    }
+
+    return BestBoneIndex;
 }
 
 uint32 FFbxImporter::GetOrCreateVertexIndex(const FNormalVertex& Vertex, FStaticMesh& OutStaticMesh)
@@ -526,7 +717,8 @@ uint32 FFbxImporter::GetOrCreateBoneIndex(FbxNode* BoneNode, FSkeletalMesh& OutS
     Bone.Name = BoneNode->GetName() != nullptr ? FString(BoneNode->GetName()) : FString();
     Bone.ParentIndex = ParentIndex;
 
-    const FMatrix GlobalBindPose = ToMatrix(BoneNode->EvaluateGlobalTransform());
+    const FbxAMatrix GlobalBindPoseFbx = BoneNode->EvaluateGlobalTransform();
+    const FMatrix GlobalBindPose = ToMatrix(GlobalBindPoseFbx);
     Bone.BindPose = GlobalBindPose;
     if (ParentIndex >= 0 && ParentIndex < static_cast<int32>(OutSkeletalMesh.Bones.size()))
     {
@@ -554,10 +746,26 @@ uint32 FFbxImporter::GetOrCreateBoneIndex(FbxNode* BoneNode, FSkeletalMesh& OutS
     OutSkeletalMesh.Bones.push_back(Bone);
     BoneIndexByNode.emplace(BoneNode, NewIndex);
     BoneGlobalBindPoseByNode.emplace(BoneNode, GlobalBindPose);
+    BoneGlobalBindPoseFbxByNode.emplace(BoneNode, GlobalBindPoseFbx);
     return NewIndex;
 }
 
-void FFbxImporter::SetBoneGlobalBindPose(FbxNode* BoneNode, const FMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh)
+FbxNode* FFbxImporter::FindClosestParentBoneNode(FbxNode* Node) const
+{
+    for (FbxNode* ParentNode = Node != nullptr ? Node->GetParent() : nullptr;
+         ParentNode != nullptr;
+         ParentNode = ParentNode->GetParent())
+    {
+        if (BoneIndexByNode.find(ParentNode) != BoneIndexByNode.end())
+        {
+            return ParentNode;
+        }
+    }
+
+    return nullptr;
+}
+
+void FFbxImporter::SetBoneGlobalBindPose(FbxNode* BoneNode, const FbxAMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh)
 {
     if (BoneNode == nullptr)
     {
@@ -565,12 +773,14 @@ void FFbxImporter::SetBoneGlobalBindPose(FbxNode* BoneNode, const FMatrix& Globa
     }
 
     const uint32 BoneIndex = GetOrCreateBoneIndex(BoneNode, OutSkeletalMesh);
-    BoneGlobalBindPoseByNode[BoneNode] = GlobalBindPose;
+    BoneGlobalBindPoseByNode[BoneNode] = ToMatrix(GlobalBindPose);
+    BoneGlobalBindPoseFbxByNode[BoneNode] = GlobalBindPose;
 
     FSkeletonBone& Bone = OutSkeletalMesh.Bones[BoneIndex];
-    if (GlobalBindPose.IsInvertible())
+    const FMatrix GlobalBindPoseMatrix = ToMatrix(GlobalBindPose);
+    if (GlobalBindPoseMatrix.IsInvertible())
     {
-        Bone.InverseBindPose = GlobalBindPose.GetInverse();
+        Bone.InverseBindPose = GlobalBindPoseMatrix.GetInverse();
     }
 }
 
@@ -636,47 +846,47 @@ TArray<FFbxImporter::FControlPointSkinData> FFbxImporter::BuildControlPointSkinD
         return ControlPointSkinData;
     }
 
-    const int32 SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
-    for (int32 SkinIndex = 0; SkinIndex < SkinCount; ++SkinIndex)
+    const int32 SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin); // 스킨 디포머
+    for (int32 SkinIndex = 0; SkinIndex < SkinCount; ++SkinIndex)       // 스킨 디포머에 대한 반복문
     {
-        FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(SkinIndex, FbxDeformer::eSkin));
+        FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(SkinIndex, FbxDeformer::eSkin)); 
         if (Skin == nullptr)
         {
             continue;
         }
 
         const int32 ClusterCount = Skin->GetClusterCount();
-        for (int32 ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex)
+        for (int32 ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex) // 스킨 디포머에 포함된 클러스터에 대한 반복문
         {
-            FbxCluster* Cluster = Skin->GetCluster(ClusterIndex);
+            FbxCluster* Cluster = Skin->GetCluster(ClusterIndex); // 클러스터(본과 그 본에 영향을 미치는 컨트롤 포인트들의 집합)
             if (Cluster == nullptr || Cluster->GetLink() == nullptr)
             {
                 continue;
             }
 
             FbxAMatrix LinkBindMatrix;
-            Cluster->GetTransformLinkMatrix(LinkBindMatrix);
-            const uint32 BoneIndex = GetOrCreateBoneIndex(Cluster->GetLink(), OutSkeletalMesh);
-            SetBoneGlobalBindPose(Cluster->GetLink(), ToMatrix(LinkBindMatrix), OutSkeletalMesh);
+            Cluster->GetTransformLinkMatrix(LinkBindMatrix); // 처음 리깅할 때, 바인드 포즈(T-Pose나 A-Pose) 상태에서 애니메이션이 하나도 적용되지 않았을 때, 이 뼈가 월드 공간상에 정확히 어디에 있었는가
+            const uint32 BoneIndex = GetOrCreateBoneIndex(Cluster->GetLink(), OutSkeletalMesh); // 뼈를 등록하고 인덱스를 가져옴
+            SetBoneGlobalBindPose(Cluster->GetLink(), LinkBindMatrix, OutSkeletalMesh); // 뼈에 inverse 바인드 포즈를 저장(추후에 현재 애니메이션 프레임의 뼈 위치 행렬 * inverse 바인드 포즈 행렬로 뼈가 원래 있던 위치에서 얼만큼 변했는지 변화량을 계산하는데 사용)
 
-            const int32 InfluenceCount = Cluster->GetControlPointIndicesCount();
-            int* ControlPointIndices = Cluster->GetControlPointIndices();
-            double* ControlPointWeights = Cluster->GetControlPointWeights();
+            const int32 InfluenceCount = Cluster->GetControlPointIndicesCount(); // 이 뼈가 영향을 미치는 컨트롤 포인트의 수
+            int* ControlPointIndices = Cluster->GetControlPointIndices();        // 이 뼈가 영향을 미치는 컨트롤 포인트들의 인덱스 배열
+            double* ControlPointWeights = Cluster->GetControlPointWeights();     // 이 뼈가 영향을 미치는 컨트롤 포인트들의 가중치 배열
             for (int32 InfluenceIndex = 0; InfluenceIndex < InfluenceCount; ++InfluenceIndex)
             {
-                const int32 ControlPointIndex = ControlPointIndices[InfluenceIndex];
+                const int32 ControlPointIndex = ControlPointIndices[InfluenceIndex]; // 영향을 받는 컨트롤 포인트의 인덱스
                 if (ControlPointIndex < 0 || ControlPointIndex >= ControlPointCount)
                 {
                     continue;
                 }
 
-                const float Weight = static_cast<float>(ControlPointWeights[InfluenceIndex]);
+                const float Weight = static_cast<float>(ControlPointWeights[InfluenceIndex]); // 영향을 받는 컨트롤 포인트에 대한 가중치
                 if (Weight <= MinBoneWeight)
                 {
                     continue;
                 }
 
-                TArray<FBoneWeightPair>& Influences = ControlPointSkinData[ControlPointIndex].Influences;
+                TArray<FBoneWeightPair>& Influences = ControlPointSkinData[ControlPointIndex].Influences; // 해당 컨트롤 포인트에 영향을 미치는 뼈들의 리스트를 가져와서
                 auto ExistingInfluence = std::find_if(
                     Influences.begin(),
                     Influences.end(),
@@ -687,11 +897,11 @@ TArray<FFbxImporter::FControlPointSkinData> FFbxImporter::BuildControlPointSkinD
 
                 if (ExistingInfluence != Influences.end())
                 {
-                    ExistingInfluence->Weight += Weight;
+                    ExistingInfluence->Weight += Weight; // 이미 이 뼈가 영향을 미치고 있다면 가중치를 누적
                 }
                 else
                 {
-                    Influences.push_back(FBoneWeightPair{ BoneIndex, Weight });
+                    Influences.push_back(FBoneWeightPair{ BoneIndex, Weight }); // 새로운 뼈의 영향을 추가
                 }
             }
         }
@@ -711,30 +921,30 @@ void FFbxImporter::NormalizeControlPointSkinData(TArray<FControlPointSkinData>& 
             Influences.end(),
             [](const FBoneWeightPair& A, const FBoneWeightPair& B)
             {
-                return A.Weight > B.Weight;
+                return A.Weight > B.Weight; // 뼈들을 가중치가 큰 순서대로 줄 세우기
             });
 
         if (Influences.size() > FSkeletalVertex::MaxBoneInfluences)
         {
-            Influences.resize(FSkeletalVertex::MaxBoneInfluences);
+            Influences.resize(FSkeletalVertex::MaxBoneInfluences); // 성능과 메모리 한계 때문에 정점이 영향받을 수 있는 뼈의 개수 제한 (지금은 영향력이 큰 뼈 4개로 제한)
         }
 
         float TotalWeight = 0.0f;
         for (const FBoneWeightPair& Influence : Influences)
         {
-            TotalWeight += Influence.Weight;
+            TotalWeight += Influence.Weight; // 모든 뼈의 가중치를 합산
         }
 
         if (TotalWeight <= MathUtil::Epsilon)
         {
-            Influences.clear();
+            Influences.clear(); // 가중치 합이 거의 0에 가깝다면 영향을 받는 뼈가 없다고 판단하고 초기화
             continue;
         }
 
         const float InverseTotalWeight = 1.0f / TotalWeight;
         for (FBoneWeightPair& Influence : Influences)
         {
-            Influence.Weight *= InverseTotalWeight;
+            Influence.Weight *= InverseTotalWeight; // 모든 뼈의 가중치 합이 1이 되도록 정규화 (1보다 작으면 정점이 원점으로 쪼그라들고, 1보다 크면 정점이 원점에서 멀어지는 현상이 발생할 수 있기 때문에 가중치 합이 1이 되도록 조정)
         }
     }
 }

@@ -149,6 +149,7 @@ public:
     TArray<FString> GetStaticMeshPaths() const;
     USkeletalMesh* LoadSkeletalMesh(const FString& Path);
     USkeletalMesh* FindSkeletalMesh(const FString& Path) const;
+    TArray<FString> GetSkeletalMeshPaths() const;
 
     ID3D11SamplerState* GetOrCreateSamplerState(ESamplerType Type, ID3D11Device* Device = nullptr);
     ID3D11DepthStencilState* GetOrCreateDepthStencilState(EDepthStencilType Type, ID3D11Device* Device = nullptr);
@@ -256,6 +257,7 @@ private:
 
     /* Paths */
     TArray<FString> ObjFilePaths;
+    TArray<FString> SkeletalMeshFilePaths;
     TArray<FString> MaterialFilePaths;
     TArray<FString> ParticleFilePaths;
     TArray<FString> FontFilePaths;

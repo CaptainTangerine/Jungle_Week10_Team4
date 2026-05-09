@@ -26,6 +26,9 @@ public:
     int32 GetBoneCount() const;
     int32 FindBoneIndex(const FString& BoneName) const;
 
+    void GetEditableProperties(TArray<FPropertyDescriptor>& OutProps) override;
+    void PostEditProperty(const char* PropertyName) override;
+
     void ResetPoseToBindPose();
     bool SetBoneLocalTransform(int32 BoneIndex, const FMatrix& LocalTransform);
     const TArray<FMatrix>& GetLocalTransforms() const { return LocalTransforms; }
@@ -46,8 +49,11 @@ public:
 private:
     const FReferenceSkeleton* GetReferenceSkeleton() const;
     const FSkinWeightVertexBuffer* GetSkinWeightVertexBuffer() const;
+    void SerializeSkeletalMeshAsset(FArchive& Ar);
     void RefreshSkeletalMeshState();
     void RestoreSavedOverrideMaterials(const TArray<UMaterialInterface*>& SavedMaterials);
+    void ReloadSkeletalMeshFromAssetPath();
+    void ApplyPropertyEdit(const char* PropertyName);
     void ResizePoseArrays();
     void MarkBoundsDirty();
     void MarkRenderStateDirty();
@@ -60,6 +66,7 @@ private:
 private:
     USkeletalMesh* SkeletalMeshAsset = nullptr;
     const FSkeletalMesh* RawSkeletalMeshData = nullptr;
+    FString SkeletalMeshAssetPath;
 
     TArray<FMatrix> LocalTransforms;
     mutable TArray<FMatrix> GlobalTransforms;

@@ -1,6 +1,7 @@
-#include "SkeletalMeshComponent.h"
+﻿#include "SkeletalMeshComponent.h"
 
 #include "Core/CollisionTypes.h"
+#include "Core/ResourceManager.h"
 
 #include <algorithm>
 
@@ -22,6 +23,8 @@ namespace
     }
 }
 
+
+
 void USkeletalMeshComponent::PostDuplicate(UObject* Original)
 {
     UMeshComponent::PostDuplicate(Original);
@@ -29,6 +32,7 @@ void USkeletalMeshComponent::PostDuplicate(UObject* Original)
     const USkeletalMeshComponent* Orig = Cast<USkeletalMeshComponent>(Original);
     SkeletalMeshAsset = Orig->SkeletalMeshAsset;
     RawSkeletalMeshData = Orig->RawSkeletalMeshData;
+    SkeletalMeshAssetPath = Orig->SkeletalMeshAssetPath;
     LocalTransforms = Orig->LocalTransforms;
     GlobalTransforms = Orig->GlobalTransforms;
     FinalSkinningTransforms = Orig->FinalSkinningTransforms;
@@ -65,9 +69,7 @@ void USkeletalMeshComponent::PostDuplicate(UObject* Original)
 void USkeletalMeshComponent::Serialize(FArchive& Ar)
 {
     UMeshComponent::Serialize(Ar);
-
-    TArray<UMaterialInterface*> SavedMaterials = Materials;
-    RestoreSavedOverrideMaterials(SavedMaterials);
+    SerializeSkeletalMeshAsset(Ar);
 }
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime)
@@ -85,6 +87,9 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
 
     SkeletalMeshAsset = InSkeletalMesh;
     RawSkeletalMeshData = nullptr;
+    SkeletalMeshAssetPath = SkeletalMeshAsset != nullptr
+        ? SkeletalMeshAsset->GetAssetPathFileName()
+        : FString();
     RefreshSkeletalMeshState();
 }
 
@@ -102,6 +107,9 @@ void USkeletalMeshComponent::SetSkeletalMeshData(const FSkeletalMesh* InSkeletal
 
     SkeletalMeshAsset = nullptr;
     RawSkeletalMeshData = InSkeletalMeshData;
+    SkeletalMeshAssetPath = RawSkeletalMeshData != nullptr
+        ? RawSkeletalMeshData->PathFileName
+        : FString();
     RefreshSkeletalMeshState();
 }
 
@@ -166,6 +174,18 @@ int32 USkeletalMeshComponent::FindBoneIndex(const FString& BoneName) const
     }
 
     return ReferenceSkeleton->FindBoneIndex(BoneName);
+}
+
+void USkeletalMeshComponent::GetEditableProperties(TArray<FPropertyDescriptor>& OutProps)
+{
+    UMeshComponent::GetEditableProperties(OutProps);
+    OutProps.push_back({ "SkeletalMesh", EPropertyType::String, &SkeletalMeshAssetPath });
+}
+
+void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
+{
+    UMeshComponent::PostEditProperty(PropertyName);
+    ApplyPropertyEdit(PropertyName);
 }
 
 void USkeletalMeshComponent::ResetPoseToBindPose()
@@ -413,6 +433,20 @@ const FSkinWeightVertexBuffer* USkeletalMeshComponent::GetSkinWeightVertexBuffer
     return MeshData != nullptr ? &MeshData->GetSkinWeightVertexBuffer() : nullptr;
 }
 
+void USkeletalMeshComponent::SerializeSkeletalMeshAsset(FArchive& Ar)
+{
+    Ar << "SkeletalMeshAsset" << SkeletalMeshAssetPath;
+
+    if (!Ar.IsLoading())
+    {
+        return;
+    }
+
+    TArray<UMaterialInterface*> SavedMaterials = Materials;
+    ReloadSkeletalMeshFromAssetPath();
+    RestoreSavedOverrideMaterials(SavedMaterials);
+}
+
 void USkeletalMeshComponent::RestoreSavedOverrideMaterials(const TArray<UMaterialInterface*>& SavedMaterials)
 {
     const int32 RestoreCount = static_cast<int32>(std::min(SavedMaterials.size(), Materials.size()));
@@ -422,6 +456,38 @@ void USkeletalMeshComponent::RestoreSavedOverrideMaterials(const TArray<UMateria
         {
             SetMaterial(i, SavedMaterials[i]);
         }
+    }
+}
+
+void USkeletalMeshComponent::ReloadSkeletalMeshFromAssetPath()
+{
+    if (SkeletalMeshAssetPath.empty())
+    {
+        SetSkeletalMesh(nullptr);
+        return;
+    }
+
+    USkeletalMesh* Mesh = FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath);
+    SetSkeletalMesh(Mesh);
+}
+
+void USkeletalMeshComponent::ApplyPropertyEdit(const char* PropertyName)
+{
+    switch (PropertyNameId(PropertyName))
+    {
+    case PropertyNameIdConstexpr("SkeletalMesh"):
+        ReloadSkeletalMeshFromAssetPath();
+        return;
+
+    case PropertyNameIdConstexpr("Materials"):
+        for (int32 i = 0; i < static_cast<int32>(Materials.size()); ++i)
+        {
+            SetMaterial(i, Materials[i]);
+        }
+        return;
+
+    default:
+        return;
     }
 }
 

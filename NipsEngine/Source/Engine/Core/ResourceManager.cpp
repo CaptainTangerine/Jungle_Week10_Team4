@@ -499,6 +499,7 @@ void FResourceManager::LoadFromAssetDirectory(const FString& Path)
 {
     //	초기화
     ObjFilePaths.clear();
+    SkeletalMeshFilePaths.clear();
     FontFilePaths.clear();
     TextureFilePaths.clear();
     MaterialFilePaths.clear();
@@ -552,14 +553,7 @@ void FResourceManager::LoadFromAssetDirectory(const FString& Path)
         }
         else if (Extension == L".fbx")
         {
-            ObjFilePaths.push_back(RelativePath);
-
-            FStaticMeshResource Resource;
-            Resource.Name = RelativePath;
-            Resource.Path = RelativePath;
-            Resource.bPreload = false;
-            Resource.bNormalizeToUnitCube = false;
-            StaticMeshRegistry[Resource.Name] = Resource;
+            SkeletalMeshFilePaths.push_back(RelativePath);
         }
         else if (Extension == L".mtl")
         {
@@ -630,6 +624,7 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
     namespace fs = std::filesystem;
 
     ObjFilePaths.clear();
+    SkeletalMeshFilePaths.clear();
     FontFilePaths.clear();
     TextureFilePaths.clear();
     MaterialFilePaths.clear();
@@ -679,14 +674,7 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
             }
             else if (Extension == L".fbx")
             {
-                ObjFilePaths.push_back(RelativePath);
-
-                FStaticMeshResource Resource;
-                Resource.Name = RelativePath;
-                Resource.Path = RelativePath;
-                Resource.bPreload = false;
-                Resource.bNormalizeToUnitCube = false;
-                StaticMeshRegistry[Resource.Name] = Resource;
+                SkeletalMeshFilePaths.push_back(RelativePath);
             }
             else if (Extension == L".mtl")
             {
@@ -2646,27 +2634,7 @@ UStaticMesh* FResourceManager::LoadStaticMeshWithOptions(const FString& Path, co
     if (LoadedMeshData == nullptr)
     {
         const auto ObjStart = std::chrono::steady_clock::now();
-
-        LoadedMeshData = [&]() -> FStaticMesh*
-        {
-            FFbxManagerWrapper& FbxManager = FFbxManagerWrapper::Get();
-            FbxManager.Initialize();
-
-            FbxScene* Scene = FbxManager.LoadFbxScene(Path);
-            if (Scene == nullptr)
-            {
-                return nullptr;
-            }
-
-            FFbxImporter FbxImporter;
-            FStaticMesh* Mesh = FbxImporter.ImportStaticMesh(Scene);
-
-            Scene->Destroy();
-            return Mesh;
-        }();
-
-
-        //LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
+        LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
         const auto ObjEnd = std::chrono::steady_clock::now();
         ObjLoadSec = std::chrono::duration<double>(ObjEnd - ObjStart).count();
 
@@ -2805,6 +2773,11 @@ USkeletalMesh* FResourceManager::FindSkeletalMesh(const FString& Path) const
 TArray<FString> FResourceManager::GetStaticMeshPaths() const
 {
     return ObjFilePaths;
+}
+
+TArray<FString> FResourceManager::GetSkeletalMeshPaths() const
+{
+    return SkeletalMeshFilePaths;
 }
 
 const TArray<FString>& FResourceManager::GetTextureFilePath() const
