@@ -52,3 +52,14 @@ struct FUIVertex
     FVector2 UV;
     FVector4 Color;
 };
+
+struct FbxVertex
+{
+    FVector Position;
+    FVector Normal;
+    FVector2 UV;
+    
+    //only top 4 Bone lefts
+    int BoneIndices[4];
+    float BoneWeights[4];
+};

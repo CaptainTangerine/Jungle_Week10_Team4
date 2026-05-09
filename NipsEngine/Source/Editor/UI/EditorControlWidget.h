@@ -10,7 +10,12 @@ public:
     virtual void Render(float DeltaTime) override;
 
 private:
+    bool OpenFbxFileDialog(FString& OutFilePath) const;
+
+private:
     int32 SelectedPrimitiveType = 0;
     int32 NumberOfSpawnedActors = 1;
     FVector CurSpawnPoint = { 0.f, 0.f, 0.f };
+    char FbxImportPathBuffer[260] = {};
+    FString LastFbxImportStatus;
 };

@@ -277,11 +277,13 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\FBXSDK;$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBXSDK\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libfbxsdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
@@ -301,7 +303,7 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\FBXSDK;$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -327,11 +329,12 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\FBXSDK;$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>C:\Users\Jungle\Desktop\Projects\Week10\NipsEngine\ThirdParty\FBXSDK\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command> copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"</Command>
@@ -353,7 +356,7 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)ThirdParty\FBXSDK;$(ProjectDir)ThirdParty\sol2\include;$(ProjectDir)ThirdParty\FMOD/inc;$(ProjectDir)ThirdParty\Lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -375,6 +378,8 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Engine\Asset\FbxLoader.cpp" />
+    <ClCompile Include="Source\Engine\Asset\SkeletalMeshTypes.cpp" />
     <ClCompile Include="Source\Engine\Core\SoundManager.cpp" />
     <ClCompile Include="Source\Engine\Core\TimeManager.cpp" />
     <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp" />
@@ -785,6 +790,8 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Engine\Asset\FbxLoader.h" />
+    <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h" />
     <ClInclude Include="Source\Engine\Core\SoundManager.h" />
     <ClInclude Include="Source\Engine\Core\TimeManager.h" />
     <ClInclude Include="Source\Engine\DriftSalvage\CollectionSystem.h" />

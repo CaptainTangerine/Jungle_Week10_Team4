@@ -1,6 +1,8 @@
 ﻿#include "Editor/UI/EditorControlWidget.h"
 
 #include "Editor/EditorEngine.h"
+#include "Core/Paths.h"
+#include "Engine/Asset/FbxLoader.h"
 #include "Engine/Viewport/ViewportCamera.h"
 
 #include "ImGui/imgui.h"
@@ -8,6 +10,8 @@
 
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PrimitiveActors.h"
+
+#include <commdlg.h>
 
 #define SEPARATOR()     \
     ;                   \
@@ -54,11 +58,37 @@ namespace
     };
 }
 
+bool FEditorControlWidget::OpenFbxFileDialog(FString& OutFilePath) const
+{
+    OutFilePath.clear();
+
+    WCHAR FileBuffer[MAX_PATH] = { 0 };
+    OPENFILENAMEW DialogDesc = {};
+    DialogDesc.lStructSize = sizeof(DialogDesc);
+    DialogDesc.hwndOwner = static_cast<HWND>(ImGui::GetMainViewport()->PlatformHandleRaw);
+    DialogDesc.lpstrFilter = L"FBX Files (*.fbx)\0*.fbx\0All Files (*.*)\0*.*\0";
+    DialogDesc.lpstrFile = FileBuffer;
+    DialogDesc.nMaxFile = MAX_PATH;
+    DialogDesc.lpstrDefExt = L"fbx";
+    DialogDesc.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+    const BOOL bPicked = GetOpenFileNameW(&DialogDesc);
+    if (!bPicked)
+    {
+        return false;
+    }
+
+    OutFilePath = FPaths::ToUtf8(FileBuffer);
+    return true;
+}
+
 // 에디터 컨트롤 위젯을 초기화하고 기본 상태를 설정합니다.
 void FEditorControlWidget::Initialize(UEditorEngine* InEditorEngine)
 {
     FEditorWidget::Initialize(InEditorEngine);
     SelectedPrimitiveType = 0;
+    FbxImportPathBuffer[0] = '\0';
+    LastFbxImportStatus.clear();
 }
 
 // 컨트롤 패널 UI를 렌더링하고 액터 생성 및 카메라 제어 기능을 처리합니다.
@@ -109,6 +139,40 @@ void FEditorControlWidget::Render(float DeltaTime)
         NumberOfSpawnedActors = 1;
     }
     ImGui::InputInt("Number of Spawn", &NumberOfSpawnedActors, 1, 10);
+
+    SEPARATOR();
+
+    ImGui::TextUnformatted("FBX Import Test");
+    ImGui::InputText("FBX Path", FbxImportPathBuffer, IM_ARRAYSIZE(FbxImportPathBuffer));
+    ImGui::SameLine();
+    if (ImGui::Button("Browse##FbxImport"))
+    {
+        FString PickedPath;
+        if (OpenFbxFileDialog(PickedPath))
+        {
+            strncpy_s(FbxImportPathBuffer, sizeof(FbxImportPathBuffer), PickedPath.c_str(), _TRUNCATE);
+            LastFbxImportStatus.clear();
+        }
+    }
+
+    if (ImGui::Button("Import FBX"))
+    {
+        if (FbxImportPathBuffer[0] == '\0')
+        {
+            LastFbxImportStatus = "FBX path is empty.";
+        }
+        else
+        {
+            FFbxLoader Loader;
+            const bool bImportSuccess = Loader.ImportFbxFile(FbxImportPathBuffer);
+            LastFbxImportStatus = bImportSuccess ? "FBX import succeeded. Check log for parsed counts." : "FBX import failed. Check log for details.";
+        }
+    }
+
+    if (!LastFbxImportStatus.empty())
+    {
+        ImGui::TextWrapped("%s", LastFbxImportStatus.c_str());
+    }
 
     SEPARATOR();
 
