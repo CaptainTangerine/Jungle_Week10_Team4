@@ -28,6 +28,20 @@ struct FNormalVertex
     FVector Bitangent;
 };
 
+struct FSkeletalVertex
+{
+    FVector Position;
+    FColor Color;
+    FVector Normal;
+    FVector2 UVs;	//	TexCoord
+    FVector Tangent;
+    FVector Bitangent;
+
+    uint32 BoneIndices[4];
+    float  BoneWeights[4];
+};
+
+
 struct FOverlayVertex
 {
     float X, Y;

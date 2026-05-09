@@ -1,8 +1,11 @@
-#include "Editor/UI/EditorFBXSceneViewWidget.h"
+﻿#include "Editor/UI/EditorFBXSceneViewWidget.h"
 
+#include "Asset/SkeletalMesh.h"
+#include "Component/SceneComponent.h"
+#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
-#include "GameFramework/PrimitiveActors.h"
+#include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
 #include "ImGui/imgui.h"
 #include "Object/Object.h"
@@ -15,6 +18,10 @@ namespace
 {
     const char* GetImportNodeTypeName(const FFBXImportNode& Node)
     {
+        if (Node.SkeletalMeshIndex >= 0 && Node.StaticMeshIndex >= 0)
+        {
+            return "SkeletalMesh+StaticMesh";
+        }
         if (Node.SkeletalMeshIndex >= 0)
         {
             return "SkeletalMesh";
@@ -39,26 +46,26 @@ namespace
         return ImVec4(0.72f, 0.72f, 0.72f, 1.0f);
     }
 
-    void ApplyImportNodeTransform(AActor* Actor, const FFBXImportNode& Node)
+    void ApplyImportNodeTransform(USceneComponent* Component, const FFBXImportNode& Node)
     {
-        if (Actor == nullptr)
+        if (Component == nullptr)
         {
             return;
         }
 
-        FVector Translation;
-        FVector Scale;
-        FMatrix RotationMatrix;
-        if (!Node.GlobalTransformMatrix.Decompose(Translation, RotationMatrix, Scale))
+        Component->SetRelativeMatrix(Node.GlobalTransformMatrix);
+    }
+
+    FString BuildImportedActorName(const FString& LoadedFilePath)
+    {
+        if (LoadedFilePath.empty())
         {
-            Translation = Node.GlobalTransformMatrix.GetOrigin();
-            Scale = FVector(1.0f, 1.0f, 1.0f);
-            RotationMatrix = FMatrix::Identity;
+            return "FBX_ImportedScene";
         }
 
-        Actor->SetActorLocation(Translation);
-        Actor->SetActorRotation(RotationMatrix.GetEuler());
-        Actor->SetActorScale(Scale);
+        const std::filesystem::path FilePath(FPaths::ToWide(LoadedFilePath));
+        const FString Stem = FPaths::ToUtf8(FilePath.stem().wstring());
+        return Stem.empty() ? "FBX_ImportedScene" : FString("FBX_") + Stem;
     }
 
     FWString GetFBXDialogInitialDir()
@@ -117,7 +124,9 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     LoadedFilePath = FilePath;
 
     FFBXImporter Importer;
-    ImportScene = Importer.Import(FilePath);
+    FFBXImportOptions Options = {};
+    Options.bImportSkinnedMeshesAsStatic = bImportSkinnedMeshesAsStatic;
+    ImportScene = Importer.Import(FilePath, Options);
     if (ImportScene.Nodes.empty())
     {
         StatusMessage = "Failed to import FBX scene.";
@@ -180,19 +189,23 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
     }
 
     ImGui::SameLine();
-    ImGui::Checkbox("Auto Expand", &bAutoExpand);
+    if (ImGui::Checkbox("Skinned -> Static", &bImportSkinnedMeshesAsStatic) && !LoadedFilePath.empty())
+    {
+        LoadFBXScene(LoadedFilePath);
+    }
 
     ImGui::SameLine();
-    const bool bHasStaticMeshes = !ImportScene.StaticMeshes.empty();
-    if (!bHasStaticMeshes)
+
+    const bool bHasMeshes = !ImportScene.StaticMeshes.empty() || !ImportScene.SkeletalMeshes.empty();
+    if (!bHasMeshes)
     {
         ImGui::BeginDisabled();
     }
-    if (ImGui::Button("Spawn Static Meshes"))
+    if (ImGui::Button("Spawn Actors"))
     {
-        SpawnImportedStaticMeshes();
+        SpawnImportedStaticMeshActors();
     }
-    if (!bHasStaticMeshes)
+    if (!bHasMeshes)
     {
         ImGui::EndDisabled();
     }
@@ -243,11 +256,6 @@ void FEditorFBXSceneViewWidget::RenderNodeRecursive(int32 NodeIndex)
     {
         Flags |= ImGuiTreeNodeFlags_Selected;
     }
-    if (bAutoExpand && NodeIndex == 0)
-    {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-    }
-
     ImGui::PushStyleColor(ImGuiCol_Text, GetImportNodeTypeColor(Node));
     const bool bOpen = ImGui::TreeNodeEx("##Node", Flags, "[%s] %s", GetImportNodeTypeName(Node), Node.Name.c_str());
     ImGui::PopStyleColor();
@@ -300,7 +308,7 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
         ImGui::Text("Vertices: %d", static_cast<int32>(Mesh.Vertices.size()));
         ImGui::Text("Indices: %d", static_cast<int32>(Mesh.Indices.size()));
         ImGui::Text("Sections: %d", static_cast<int32>(Mesh.Sections.size()));
-        ImGui::Text("Material Slots: %d", static_cast<int32>(Mesh.MatreialSlots.size()));
+        ImGui::Text("Material Slots: %d", static_cast<int32>(Mesh.MaterialSlots.size()));
 
         if (ImGui::TreeNode("Sections"))
         {
@@ -315,9 +323,9 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
 
         if (ImGui::TreeNode("Material Slots"))
         {
-            for (int32 SlotIndex = 0; SlotIndex < static_cast<int32>(Mesh.MatreialSlots.size()); ++SlotIndex)
+            for (int32 SlotIndex = 0; SlotIndex < static_cast<int32>(Mesh.MaterialSlots.size()); ++SlotIndex)
             {
-                const FStaticMeshMaterialSlot& Slot = Mesh.MatreialSlots[SlotIndex];
+                const FStaticMeshMaterialSlot& Slot = Mesh.MaterialSlots[SlotIndex];
                 ImGui::Text("#%d %s", SlotIndex, Slot.SlotName.c_str());
             }
             ImGui::TreePop();
@@ -331,32 +339,41 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
         ImGui::Separator();
         ImGui::Text("Skeletal Mesh");
         ImGui::Text("Name: %s", Mesh.Name.c_str());
-        ImGui::Text("Skin Deformers: %d", Mesh.SkinDeformerCount);
-        ImGui::Text("Control Points: %d", Mesh.ControlPointCount);
-        ImGui::Text("Polygons: %d", Mesh.PolygonCount);
     }
 }
 
-void FEditorFBXSceneViewWidget::SpawnImportedStaticMeshes()
+void FEditorFBXSceneViewWidget::SpawnImportedStaticMeshActors()
 {
-    if (ImportScene.StaticMeshes.empty())
+    // StaticMesh와 SkeletalMesh 데이터가 모두 없으면 생성할 것이 없으므로 조기 반환
+    if (ImportScene.StaticMeshes.empty() && ImportScene.SkeletalMeshes.empty())
     {
-        StatusMessage = "No static mesh import data to spawn.";
+        StatusMessage = "스폰할 메시 데이터가 없습니다.";
         return;
     }
 
     UWorld* World = GEngine ? GEngine->GetWorld() : nullptr;
     if (World == nullptr)
     {
-        StatusMessage = "Failed to spawn FBX static meshes. World is null.";
+        StatusMessage = "World가 null입니다. FBX Actor 스폰 실패.";
         return;
     }
 
     FFBXImporter Importer;
-    int32 SpawnedCount = 0;
+    int32 StaticSpawnedCount  = 0;
+    int32 SkeletalSpawnedCount = 0;
 
+    // FBX 씬 전체를 하나의 Actor로 묶는다.
+    // 각 메시 컴포넌트는 이 Actor의 RootComponent에 붙는다.
+    AActor* Actor = World->SpawnActor<AActor>();
+    Actor->SetFName(FName(BuildImportedActorName(LoadedFilePath).c_str()));
+
+    USceneComponent* RootComponent = Actor->AddComponent<USceneComponent>();
+    Actor->SetRootComponent(RootComponent);
+
+    // Static Mesh 처리
     for (const FFBXStaticMeshImportData& MeshData : ImportScene.StaticMeshes)
     {
+        // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
         if (MeshData.Vertices.empty() || MeshData.Indices.empty())
         {
             continue;
@@ -368,31 +385,71 @@ void FEditorFBXSceneViewWidget::SpawnImportedStaticMeshes()
             continue;
         }
 
+        // UStaticMesh 에셋 오브젝트 생성 후 가공된 메시 데이터를 등록
         UStaticMesh* StaticMeshAsset = UObjectManager::Get().CreateObject<UStaticMesh>();
         StaticMeshAsset->SetMeshData(RawMesh);
 
-        AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
-        Actor->SetFName(FName((FString("FBX_") + MeshData.Name).c_str()));
-
-        UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Actor->GetRootComponent());
-        if (MeshComponent == nullptr)
-        {
-            MeshComponent = Actor->AddComponent<UStaticMeshComponent>();
-            Actor->SetRootComponent(MeshComponent);
-        }
-
+        UStaticMeshComponent* MeshComponent = Actor->AddComponent<UStaticMeshComponent>();
+        MeshComponent->AttachToComponent(RootComponent);
         MeshComponent->SetStaticMesh(StaticMeshAsset);
 
+        // 정점은 노드 로컬 공간(GeometricTransform만 적용)이므로
+        // GlobalTransformMatrix를 컴포넌트 월드 트랜스폼에 반영해야 씬 원점 기준 올바른 위치에 배치된다.
         if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
         {
-            ApplyImportNodeTransform(Actor, ImportScene.Nodes[MeshData.SourceNodeIndex]);
+            ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
         }
 
-        ++SpawnedCount;
+        ++StaticSpawnedCount;
     }
 
+    // Skeletal Mesh 처리
+    for (const FFBXSkeletalMeshImportData& MeshData : ImportScene.SkeletalMeshes)
+    {
+        // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
+        if (MeshData.Vertices.empty() || MeshData.Indices.empty())
+        {
+            continue;
+        }
+
+        FSkeletalMesh* RawMesh = Importer.CreateSkeletalMeshFromtImportData(MeshData);
+        if (RawMesh == nullptr)
+        {
+            continue;
+        }
+
+        // USkeletalMesh 에셋 오브젝트 생성 후 가공된 메시 데이터를 등록
+        USkeletalMesh* SkeletalMeshAsset = UObjectManager::Get().CreateObject<USkeletalMesh>();
+        SkeletalMeshAsset->SetMeshData(RawMesh);
+
+        USkinnedMeshComponent* MeshComponent = Actor->AddComponent<USkinnedMeshComponent>();
+        MeshComponent->AttachToComponent(RootComponent);
+        MeshComponent->SetSkeletalMesh(SkeletalMeshAsset);
+
+        // BindPose 버텍스 데이터를 CPU 측에 준비한다.
+        // GPU 버퍼(VB/IB)는 첫 드로우 시 OpaqueRenderPass에서 Lazy Init된다.
+        MeshComponent->InitializeSkinnedVerticesFromBindPose();
+
+        // FBX 노드의 GlobalTransform을 컴포넌트 월드 트랜스폼에 반영
+        if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
+        {
+            ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
+        }
+
+        ++SkeletalSpawnedCount;
+    }
+
+    // 공간 쿼리 인덱스 갱신 (새 컴포넌트의 AABB가 반영되어야 컬링/쿼리가 정상 동작)
     World->RebuildSpatialIndex();
-    StatusMessage = SpawnedCount > 0
-        ? FString("Spawned ") + std::to_string(SpawnedCount) + " FBX static mesh actor(s)."
-        : FString("No valid static mesh data was spawned.");
+
+    const int32 TotalSpawned = StaticSpawnedCount + SkeletalSpawnedCount;
+    if (TotalSpawned > 0)
+    {
+        StatusMessage = FString("FBX Actor 스폰 완료 — Static: ") + std::to_string(StaticSpawnedCount)
+            + ", Skeletal: " + std::to_string(SkeletalSpawnedCount) + ".";
+    }
+    else
+    {
+        StatusMessage = "유효한 메시 데이터가 없어 스폰하지 않았습니다.";
+    }
 }

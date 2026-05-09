@@ -4,12 +4,14 @@
 #include "Render/Resource/Material.h"
 #include "Render/Scene/RenderBus.h"
 #include "Render/Scene/RenderCommand.h"
+#include "Component/SkinnedMeshComponent.h"
 
 namespace
 {
     bool IsDepthPrepassEligible(const FRenderCommand& Cmd)
     {
-        if (Cmd.Type != ERenderCommandType::StaticMesh)
+        if (Cmd.Type != ERenderCommandType::StaticMesh &&
+            Cmd.Type != ERenderCommandType::SkinnedMesh)
         {
             return false;
         }
@@ -112,14 +114,33 @@ bool FDepthPrepassRenderPass::DrawCommand(const FRenderPassContext* Context)
             continue;
         }
 
-        if (Cmd.MeshBuffer == nullptr || !Cmd.MeshBuffer->IsValid())
-        {
-            continue;
-        }
+        ID3D11Buffer* VertexBuffer = nullptr;
+        ID3D11Buffer* IndexBuffer = nullptr;
+        uint32 VertexCount = 0;
+        uint32 Stride = 0;
 
-        ID3D11Buffer* VertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
-        const uint32 VertexCount = Cmd.MeshBuffer->GetVertexBuffer().GetVertexCount();
-        const uint32 Stride = Cmd.MeshBuffer->GetVertexBuffer().GetStride();
+        if (Cmd.SkinnedMeshRenderResource != nullptr)
+        {
+            // Skinned resources are prepared once in FRenderPipeline before
+            // shadow/depth/opaque passes run, so this pass only binds them.
+            FSkinnedMeshRenderResource* SkinnedResource = Cmd.SkinnedMeshRenderResource;
+            VertexBuffer = SkinnedResource->DynamicSkinnedVertexBuffer.GetBuffer();
+            IndexBuffer = SkinnedResource->StaticIB.GetBuffer();
+            VertexCount = SkinnedResource->DynamicSkinnedVertexBuffer.GetVertexCount();
+            Stride = SkinnedResource->DynamicSkinnedVertexBuffer.GetStride();
+        }
+        else
+        {
+            if (Cmd.MeshBuffer == nullptr || !Cmd.MeshBuffer->IsValid())
+            {
+                continue;
+            }
+
+            VertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
+            IndexBuffer = Cmd.MeshBuffer->GetIndexBuffer().GetBuffer();
+            VertexCount = Cmd.MeshBuffer->GetVertexBuffer().GetVertexCount();
+            Stride = Cmd.MeshBuffer->GetVertexBuffer().GetStride();
+        }
         uint32 Offset = 0;
 
         if (VertexBuffer == nullptr || VertexCount == 0 || Stride == 0)
@@ -138,7 +159,6 @@ bool FDepthPrepassRenderPass::DrawCommand(const FRenderPassContext* Context)
 
         DeviceContext->IASetVertexBuffers(0, 1, &VertexBuffer, &Stride, &Offset);
 
-        ID3D11Buffer* IndexBuffer = Cmd.MeshBuffer->GetIndexBuffer().GetBuffer();
         if (IndexBuffer != nullptr)
         {
             DeviceContext->IASetIndexBuffer(IndexBuffer, DXGI_FORMAT_R32_UINT, 0);

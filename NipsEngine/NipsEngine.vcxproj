@@ -283,6 +283,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/IGNORE:4099,4229 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
@@ -309,6 +310,7 @@ copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug\libfbxsdk.dll" "$(OutDir)
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\FBX SDK\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/IGNORE:4099,4229 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)ThirdParty\FMOD\lib\x64\fmod.dll" "$(OutDir)fmod.dll"
@@ -386,6 +388,11 @@ copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDi
     <ClCompile Include="Source\Engine\Asset\FBX\FBXImporter.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSDKContext.cpp" />
+    <ClInclude Include="Source\Engine\Asset\SkeletalMesh.h" />
+    <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h" />
+    <ClCompile Include="Source\Engine\Asset\SkeletalMesh.cpp" />
+    <ClCompile Include="Source\Engine\Component\SkeletalMeshComponent.cpp" />
+    <ClCompile Include="Source\Engine\Component\SkinnedMeshComponent.cpp" />
     <ClCompile Include="Source\Engine\Core\SoundManager.cpp" />
     <ClCompile Include="Source\Engine\Core\TimeManager.cpp" />
     <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp" />
@@ -869,6 +876,8 @@ copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDi
     <ClInclude Include="Source\Engine\Component\ShapeComponent.h" />
     <ClInclude Include="Source\Engine\Component\SpringArmComponent.h" />
     <ClInclude Include="Source\Engine\Component\SkyAtmosphereComponent.h" />
+    <ClInclude Include="Source\Engine\Component\SkeletalMeshComponent.h" />
+    <ClInclude Include="Source\Engine\Component\SkinnedMeshComponent.h" />
     <ClInclude Include="Source\Engine\Component\StaticMeshComponent.h" />
     <ClInclude Include="Source\Engine\Component\SubUVComponent.h" />
     <ClInclude Include="Source\Engine\Component\TextRenderComponent.h" />
@@ -1298,9 +1307,6 @@ copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDi
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">true</ExcludedFromBuild>
     </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="cpp.hint" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

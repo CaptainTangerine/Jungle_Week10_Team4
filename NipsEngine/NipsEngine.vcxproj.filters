@@ -49,14 +49,23 @@
     <Filter Include="Source\Engine\Component\Movement">
       <UniqueIdentifier>{a5b9b888-60c7-ef17-a883-5cc31c907635}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Component\Script">
+      <UniqueIdentifier>{7d64f04d-9628-4b1b-bdb9-e17c9fddf104}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Core">
       <UniqueIdentifier>{8b69df27-06f7-dea9-00be-7dcc5bcae5a6}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\Core\Containers">
       <UniqueIdentifier>{d46d3ee9-22aa-c303-1370-edcc47ae1fc1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Core\Delegate">
+      <UniqueIdentifier>{22d2f5bb-36af-4ca2-acf3-728c3fb7d63c}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Core\Logging">
       <UniqueIdentifier>{6f50ac41-faa1-3726-af8c-a978dcf9482e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Engine\DriftSalvage">
+      <UniqueIdentifier>{d390c210-0572-48f5-82af-ad1055d6711a}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine\GameFramework">
       <UniqueIdentifier>{52c13701-c05b-69fd-253f-f87ac22453d9}</UniqueIdentifier>
@@ -106,6 +115,9 @@
     <Filter Include="Source\Engine\Render\Scene">
       <UniqueIdentifier>{47ff1c07-1c1a-4340-8c8b-82e5729c9fa7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Engine\Scripting">
+      <UniqueIdentifier>{a3dc5f3c-9f7b-48df-a890-11cf395b3124}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Engine\Runtime">
       <UniqueIdentifier>{26c2758f-6f33-95db-0d84-95cb2a4bcc52}</UniqueIdentifier>
     </Filter>
@@ -120,6 +132,9 @@
     </Filter>
     <Filter Include="Source\Engine\Spatial">
       <UniqueIdentifier>{f8334c36-7f14-c751-7bba-2157775fd0eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Engine\UI">
+      <UniqueIdentifier>{64d920ab-6f46-4acf-83cb-9f0d7f279c52}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Game">
       <UniqueIdentifier>{66923485-3049-4823-9345-234983204932}</UniqueIdentifier>
@@ -243,7 +258,9 @@
     <FxCompile Include="Shaders\Multipass\PresentPass.hlsl">
       <Filter>Shaders\Multipass</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\Multipass\ScreenEffectsRenderPass.hlsl" />
+    <FxCompile Include="Shaders\Multipass\ScreenEffectsRenderPass.hlsl">
+      <Filter>Shaders\Multipass</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Editor\EditorEngine.cpp">
@@ -873,11 +890,17 @@
       <Filter>ThirdParty\Lua</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\Script\LuaScriptPathUtils.cpp">
-      <Filter>Source\Engine\Component</Filter>
+      <Filter>Source\Engine\Component\Script</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Component\Script\ScriptComponent.cpp" />
-    <ClCompile Include="Source\Engine\Scripting\LuaBinder.cpp" />
-    <ClCompile Include="Source\Engine\Scripting\LuaScriptSubsystem.cpp" />
+    <ClCompile Include="Source\Engine\Component\Script\ScriptComponent.cpp">
+      <Filter>Source\Engine\Component\Script</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Scripting\LuaBinder.cpp">
+      <Filter>Source\Engine\Scripting</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Scripting\LuaScriptSubsystem.cpp">
+      <Filter>Source\Engine\Scripting</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Game\GameEngine.cpp">
       <Filter>Source\Game</Filter>
     </ClCompile>
@@ -887,12 +910,18 @@
     <ClCompile Include="Source\Game\GameViewportClient.cpp">
       <Filter>Source\Game</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Core\SoundManager.cpp" />
+    <ClCompile Include="Source\Engine\Core\SoundManager.cpp">
+      <Filter>Source\Engine\Core</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Core\TimeManager.cpp">
       <Filter>Source\Engine\Core</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\Collision\CollisionSystem.cpp" />
-    <ClCompile Include="Source\Engine\Component\ShapeComponent.cpp" />
+    <ClCompile Include="Source\Engine\Collision\CollisionSystem.cpp">
+      <Filter>Source\Engine\Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Component\ShapeComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\Input\EditorController.cpp">
       <Filter>Source\Editor\Input</Filter>
     </ClCompile>
@@ -911,19 +940,47 @@
     <ClCompile Include="Source\Engine\Input\GameInputController.cpp">
       <Filter>Source\Engine\Input</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\UI\UIManager.cpp" />
-    <ClCompile Include="Source\Engine\UI\UIElement.cpp" />
-    <ClCompile Include="Source\Engine\Render\UIBatcher.cpp" />
-    <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\UIRenderPass.cpp" />
-    <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp" />
-    <ClCompile Include="Source\Engine\DriftSalvage\ExplosionSystem.cpp" />
-    <ClCompile Include="Source\Engine\Render\RingBatcher.cpp" />
-    <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.cpp" />
+    <ClCompile Include="Source\Engine\UI\UIManager.cpp">
+      <Filter>Source\Engine\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\UI\UIElement.cpp">
+      <Filter>Source\Engine\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Render\UIBatcher.cpp">
+      <Filter>Source\Engine\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\UIRenderPass.cpp">
+      <Filter>Source\Engine\Render\Renderer\RenderFlow</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\DriftSalvage\CollectionSystem.cpp">
+      <Filter>Source\Engine\DriftSalvage</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\DriftSalvage\ExplosionSystem.cpp">
+      <Filter>Source\Engine\DriftSalvage</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Render\RingBatcher.cpp">
+      <Filter>Source\Engine\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.cpp">
+      <Filter>Source\Engine\Render\Renderer\RenderFlow</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.cpp">
       <Filter>Source\Engine\Asset</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSDKContext.cpp">
       <Filter>Source\Engine\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Asset\FBX\FBXImporter.cpp">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Asset\SkeletalMesh.cpp">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Component\SkeletalMeshComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Component\SkinnedMeshComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1699,16 +1756,32 @@
       <Filter>ThirdParty\Lua</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\Script\LuaScriptPathUtils.h">
-      <Filter>Source\Engine\Component</Filter>
+      <Filter>Source\Engine\Component\Script</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Component\Script\ScriptComponent.h" />
-    <ClInclude Include="Source\Engine\Scripting\LuaBinder.h" />
-    <ClInclude Include="Source\Engine\Scripting\LuaScriptInstance.h" />
-    <ClInclude Include="Source\Engine\Scripting\LuaScriptSubsystem.h" />
-    <ClInclude Include="Source\Engine\Core\Delegate\Delegate.h" />
-    <ClInclude Include="Source\Engine\Core\Delegate\MulticastDelegate.h" />
-    <ClInclude Include="Source\Engine\Core\Delegate\DelegateHandle.h" />
-    <ClInclude Include="Source\Engine\Core\Delegate\DelegateMacros.h" />
+    <ClInclude Include="Source\Engine\Component\Script\ScriptComponent.h">
+      <Filter>Source\Engine\Component\Script</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Scripting\LuaBinder.h">
+      <Filter>Source\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Scripting\LuaScriptInstance.h">
+      <Filter>Source\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Scripting\LuaScriptSubsystem.h">
+      <Filter>Source\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Core\Delegate\Delegate.h">
+      <Filter>Source\Engine\Core\Delegate</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Core\Delegate\MulticastDelegate.h">
+      <Filter>Source\Engine\Core\Delegate</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Core\Delegate\DelegateHandle.h">
+      <Filter>Source\Engine\Core\Delegate</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Core\Delegate\DelegateMacros.h">
+      <Filter>Source\Engine\Core\Delegate</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Game\GameEngine.h">
       <Filter>Source\Game</Filter>
     </ClInclude>
@@ -1718,12 +1791,18 @@
     <ClInclude Include="Source\Game\GameViewportClient.h">
       <Filter>Source\Game</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Core\SoundManager.h" />
+    <ClInclude Include="Source\Engine\Core\SoundManager.h">
+      <Filter>Source\Engine\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Core\TimeManager.h">
       <Filter>Source\Engine\Core</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\Collision\CollisionSystem.h" />
-    <ClInclude Include="Source\Engine\Component\ShapeComponent.h" />
+    <ClInclude Include="Source\Engine\Collision\CollisionSystem.h">
+      <Filter>Source\Engine\Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\ShapeComponent.h">
+      <Filter>Source\Engine\Component</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Editor\Input\EditorController.h">
       <Filter>Source\Editor\Input</Filter>
     </ClInclude>
@@ -1742,14 +1821,30 @@
     <ClInclude Include="Source\Engine\Input\GameInputController.h">
       <Filter>Source\Engine\Input</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\UI\UIManager.h" />
-    <ClInclude Include="Source\Engine\UI\UIElement.h" />
-    <ClInclude Include="Source\Engine\Render\UIBatcher.h" />
-    <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\UIRenderPass.h" />
-    <ClInclude Include="Source\Engine\DriftSalvage\CollectionSystem.h" />
-    <ClInclude Include="Source\Engine\DriftSalvage\ExplosionSystem.h" />
-    <ClInclude Include="Source\Engine\Render\RingBatcher.h" />
-    <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.h" />
+    <ClInclude Include="Source\Engine\UI\UIManager.h">
+      <Filter>Source\Engine\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\UI\UIElement.h">
+      <Filter>Source\Engine\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Render\UIBatcher.h">
+      <Filter>Source\Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\UIRenderPass.h">
+      <Filter>Source\Engine\Render\Renderer\RenderFlow</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\DriftSalvage\CollectionSystem.h">
+      <Filter>Source\Engine\DriftSalvage</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\DriftSalvage\ExplosionSystem.h">
+      <Filter>Source\Engine\DriftSalvage</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Render\RingBatcher.h">
+      <Filter>Source\Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Render\Renderer\RenderFlow\ScreenEffectsRenderPass.h">
+      <Filter>Source\Engine\Render\Renderer\RenderFlow</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>
@@ -1758,6 +1853,21 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\Asset\FBX\FBXSDKContext.h">
       <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\FBX\FBXImporter.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\SkeletalMesh.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\SkeletalMeshComponent.h">
+      <Filter>Source\Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\SkinnedMeshComponent.h">
+      <Filter>Source\Engine\Component</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

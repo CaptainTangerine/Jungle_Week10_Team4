@@ -17,6 +17,7 @@
 #include "Component/SkyAtmosphereComponent.h"
 #include "Component/SpringArmComponent.h"
 #include "Component/StaticMeshComponent.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
 #include "Component/WaterComponent.h"
@@ -159,6 +160,7 @@ namespace
     constexpr FComponentRegistrationSpec ComponentSpecs[] = {
         { "Scene Component", "Common", &RegisterSceneComponent },
         { "StaticMesh Component", "Common", &RegisterSimple<UStaticMeshComponent> },
+        { "SkeletalMesh Component", "Common", &RegisterSimple<USkeletalMeshComponent> },
         { "Script Component", "Common", &RegisterSimple<UScriptComponent> },
         { "SubUV Component", "Common", &RegisterSubUVComponent },
         { "TextRender Component", "Common", &RegisterTextRenderComponent },

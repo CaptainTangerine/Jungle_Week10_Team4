@@ -36,6 +36,7 @@ public:
     virtual void SetRelativeLocation(const FVector& NewLocation);
     virtual void SetRelativeRotation(const FVector& NewRotation);
     virtual void SetRelativeScale(const FVector& NewScale);
+    void SetRelativeMatrix(const FMatrix& NewRelativeMatrix);
 
     void MarkTransformDirty();
 
@@ -51,6 +52,7 @@ public:
     FVector GetRelativeLocation() const { return RelativeLocation; }
     FVector GetRelativeRotation() const { return RelativeRotation; }
     FVector GetRelativeScale() const { return RelativeScale3D; }
+    bool IsUsingCustomRelativeMatrix() const { return bUseCustomRelativeMatrix; }
 
     FVector GetForwardVector() const;
     FVector GetUpVector() const;
@@ -92,6 +94,7 @@ private:
     void SyncQuatFromEulerCache();
     void SyncEulerCacheFromQuat();
     void ApplyRelativeQuat(const FQuat& NewRotationQuat);
+    void ClearCustomRelativeMatrix();
 
 protected:
     USceneComponent* ParentComponent = nullptr;
@@ -109,4 +112,7 @@ protected:
     // Authoritative rotation storage using quaternion to avoid gimbal lock.
     FQuat RelativeRotationQuat = FQuat::Identity;
     FVector RelativeScale3D{ 1.0f, 1.0f, 1.0f };
+
+    bool bUseCustomRelativeMatrix = false;
+    FMatrix CustomRelativeMatrix = FMatrix::Identity;
 };

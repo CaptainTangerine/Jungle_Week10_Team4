@@ -25,6 +25,11 @@ public:
     template<typename TVertex>
     void Create(ID3D11Device* InDevice, const TArray<TVertex>& InData);
 
+    template<typename TVertex>
+    void CreateDynamic(ID3D11Device* InDevice, uint32 InVertexCount);
+
+    void CreateDynamic(ID3D11Device* InDevice, uint32 InVertexCount, uint32 InStride);
+
     void SetRaw(ID3D11Buffer* InBuffer, uint32 InVertexCount, uint32 InStride);
     void Release();
 
@@ -57,6 +62,7 @@ class FIndexBuffer
 {
 public:
     void Create(ID3D11Device* InDevice, const TArray<uint32>& InData);
+    void CreateDynamic(ID3D11Device* InDevice, uint32 InIndexCount);
     void Release();
 
     uint32 GetIndexCount() const { return IndexCount; }
@@ -138,6 +144,12 @@ void FVertexBuffer::Create(ID3D11Device* InDevice, const TArray<TVertex>& InData
 
     VertexCount = static_cast<uint32>(InData.size());
     Stride = InStride;
+}
+
+template <typename TVertex>
+void FVertexBuffer::CreateDynamic(ID3D11Device* InDevice, uint32 InVertexCount)
+{
+    CreateDynamic(InDevice, InVertexCount, sizeof(TVertex));
 }
 
 template <typename TVertex>

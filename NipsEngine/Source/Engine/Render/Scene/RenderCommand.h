@@ -21,6 +21,7 @@
 #include "Math/Vector4.h"
 
 struct ID3D11ShaderResourceView;
+struct FSkinnedMeshRenderResource;
 
 enum class ERenderCommandType
 {
@@ -34,6 +35,7 @@ enum class ERenderCommandType
     Font,		// TextRenderComponent — FontBatcher 경유
     SubUV,		// SubUVComponent     — SubUVBatcher 경유
     StaticMesh,	// UStaticMeshComponent — OBJ 메시 퐁셰이딩
+    SkinnedMesh,
     Decal,
     Light,
     Sky,
@@ -350,6 +352,10 @@ struct FRenderCommand
 
     //	VB, IB 모두 담고 있는 MB
     FMeshBuffer* MeshBuffer = nullptr;
+
+    // 추후 GPU Skinning을 하면 DynamicBuffer를 안써서 통합이 가능할 것으로 보임
+    FSkinnedMeshRenderResource* SkinnedMeshRenderResource = nullptr;
+
     UMaterialInterface* Material = nullptr;
     uint32 SectionIndexStart = 0;
     uint32 SectionIndexCount = 0;

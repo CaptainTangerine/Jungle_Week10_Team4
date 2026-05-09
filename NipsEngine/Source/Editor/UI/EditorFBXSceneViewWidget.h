@@ -17,12 +17,12 @@ private:
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);
     void RenderDetails() const;
-    void SpawnImportedStaticMeshes();
+    void SpawnImportedStaticMeshActors();
 
 private:
     FFBXImportScene ImportScene;
     FString LoadedFilePath;
     FString StatusMessage = "No FBX loaded.";
     int32 SelectedNodeIndex = -1;
-    bool bAutoExpand = true;
+    bool bImportSkinnedMeshesAsStatic = false;
 };

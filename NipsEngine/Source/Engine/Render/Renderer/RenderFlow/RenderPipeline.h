@@ -47,6 +47,9 @@ public:
     ID3D11ShaderResourceView* GetOutSRV() const { return OutSRV; }
 
 private:
+    void PrepareSkinnedMeshRenderResources(const FRenderPassContext* Context);
+    void PrepareSkinnedMeshRenderCommand(const FRenderPassContext* Context, const struct FRenderCommand& Cmd);
+
     std::shared_ptr<FLightCullingPass> LightCullingPass;
     std::shared_ptr<FHitMapRenderPass> HitMapRenderPass;
     std::shared_ptr<FSkyRenderPass> SkyRenderPass;

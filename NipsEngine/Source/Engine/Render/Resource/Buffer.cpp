@@ -20,9 +20,38 @@ void FVertexBuffer::SetRaw(ID3D11Buffer* InBuffer, uint32 InVertexCount, uint32 
     Stride      = InStride;
 }
 
+void FVertexBuffer::CreateDynamic(ID3D11Device* InDevice, uint32 InVertexCount, uint32 InStride)
+{
+    if (!InDevice || InVertexCount == 0 || InStride == 0)
+    {
+        Release();
+        Stride = InStride;
+        return;
+    }
+
+    D3D11_BUFFER_DESC Desc = {};
+    Desc.ByteWidth = InVertexCount * InStride;
+    Desc.Usage = D3D11_USAGE_DYNAMIC;
+    Desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    Desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    HRESULT hr = InDevice->CreateBuffer(&Desc, nullptr, Buffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        Release();
+        Stride = InStride;
+        return;
+    }
+
+    VertexCount = InVertexCount;
+    Stride = InStride;
+}
+
 void FVertexBuffer::Release()
 {
     Buffer.Reset();
+    VertexCount = 0;
+    Stride = 0;
 }
 
 ID3D11Buffer* FVertexBuffer::GetBuffer() const
@@ -98,9 +127,34 @@ void FIndexBuffer::Create(ID3D11Device* InDevice, const TArray<uint32>& InData)
     IndexCount = static_cast<uint32>(InData.size());
 }
 
+void FIndexBuffer::CreateDynamic(ID3D11Device* InDevice, uint32 InIndexCount)
+{
+    if (!InDevice || InIndexCount == 0)
+    {
+        Release();
+        return;
+    }
+
+    D3D11_BUFFER_DESC Desc = {};
+    Desc.Usage = D3D11_USAGE_DYNAMIC;
+    Desc.ByteWidth = sizeof(uint32) * InIndexCount;
+    Desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    Desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    HRESULT hr = InDevice->CreateBuffer(&Desc, nullptr, Buffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        Release();
+        return;
+    }
+
+    IndexCount = InIndexCount;
+}
+
 void FIndexBuffer::Release()
 {
     Buffer.Reset();
+    IndexCount = 0;
 }
 
 ID3D11Buffer* FIndexBuffer::GetBuffer() const

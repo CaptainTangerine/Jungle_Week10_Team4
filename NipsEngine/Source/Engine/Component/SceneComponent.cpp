@@ -12,6 +12,8 @@ USceneComponent::USceneComponent()
     CachedWorldMatrix = FMatrix::Identity;
     CachedWorldTransform = FTransform::Identity;
     RelativeRotationQuat = FQuat::Identity;
+    CustomRelativeMatrix = FMatrix::Identity;
+    bUseCustomRelativeMatrix = false;
     bTransformDirty = true;
     UpdateWorldMatrix();
 }
@@ -118,6 +120,7 @@ void USceneComponent::GetEditableProperties(TArray<FPropertyDescriptor>& OutProp
 void USceneComponent::PostEditProperty(const char* PropertyName)
 {
     UActorComponent::PostEditProperty(PropertyName);
+    ClearCustomRelativeMatrix();
     SyncQuatFromEulerCache();
     MarkTransformDirty();
 }
@@ -154,12 +157,14 @@ void USceneComponent::SetRelativeRotationQuat(const FQuat& NewRotationQuat)
 
 void USceneComponent::SetRelativeLocation(const FVector& NewLocation)
 {
+    ClearCustomRelativeMatrix();
     RelativeLocation = NewLocation;
     MarkTransformDirty();
 }
 
 void USceneComponent::SetRelativeRotation(const FVector& NewRotation)
 {
+    ClearCustomRelativeMatrix();
     RelativeRotation = NewRotation;
     SyncQuatFromEulerCache();
     SyncEulerCacheFromQuat();
@@ -168,7 +173,30 @@ void USceneComponent::SetRelativeRotation(const FVector& NewRotation)
 
 void USceneComponent::SetRelativeScale(const FVector& NewScale)
 {
+    ClearCustomRelativeMatrix();
     RelativeScale3D = NewScale;
+    MarkTransformDirty();
+}
+
+void USceneComponent::SetRelativeMatrix(const FMatrix& NewRelativeMatrix)
+{
+    CustomRelativeMatrix = NewRelativeMatrix;
+    bUseCustomRelativeMatrix = true;
+
+    FMatrix RotationMatrix;
+    if (CustomRelativeMatrix.Decompose(RelativeLocation, RotationMatrix, RelativeScale3D))
+    {
+        RelativeRotationQuat = FQuat(RotationMatrix).GetNormalized();
+        SyncEulerCacheFromQuat();
+    }
+    else
+    {
+        RelativeLocation = CustomRelativeMatrix.GetOrigin();
+        RelativeRotation = FVector::ZeroVector;
+        RelativeRotationQuat = FQuat::Identity;
+        RelativeScale3D = FVector(1.0f, 1.0f, 1.0f);
+    }
+
     MarkTransformDirty();
 }
 
@@ -188,11 +216,21 @@ void USceneComponent::MarkTransformDirty()
 
 FTransform USceneComponent::GetRelativeTransform() const
 {
+    if (bUseCustomRelativeMatrix)
+    {
+        return FTransform(CustomRelativeMatrix);
+    }
+
     return FTransform(RelativeRotationQuat, RelativeLocation, RelativeScale3D);
 }
 
 FMatrix USceneComponent::GetRelativeMatrix() const
 {
+    if (bUseCustomRelativeMatrix)
+    {
+        return CustomRelativeMatrix;
+    }
+
     return GetRelativeTransform().ToMatrixWithScale();
 }
 
@@ -380,6 +418,11 @@ void USceneComponent::SerializeRelativeTransformState(FArchive& Ar)
     Ar << "Location" << RelativeLocation;
     Ar << "Rotation" << RelativeRotation;
     Ar << "Scale" << RelativeScale3D;
+    Ar << "UseCustomRelativeMatrix" << bUseCustomRelativeMatrix;
+    if (bUseCustomRelativeMatrix)
+    {
+        Ar << "CustomRelativeMatrix" << CustomRelativeMatrix;
+    }
 
     if (!Ar.IsLoading())
     {
@@ -387,6 +430,12 @@ void USceneComponent::SerializeRelativeTransformState(FArchive& Ar)
     }
 
     SyncQuatFromEulerCache();
+    if (bUseCustomRelativeMatrix)
+    {
+        SetRelativeMatrix(CustomRelativeMatrix);
+        return;
+    }
+
     MarkTransformDirty();
 }
 
@@ -437,7 +486,14 @@ void USceneComponent::SyncEulerCacheFromQuat()
 
 void USceneComponent::ApplyRelativeQuat(const FQuat& NewRotationQuat)
 {
+    ClearCustomRelativeMatrix();
     RelativeRotationQuat = NewRotationQuat.GetNormalized();
     SyncEulerCacheFromQuat();
     MarkTransformDirty();
+}
+
+void USceneComponent::ClearCustomRelativeMatrix()
+{
+    bUseCustomRelativeMatrix = false;
+    CustomRelativeMatrix = FMatrix::Identity;
 }

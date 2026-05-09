@@ -10,8 +10,6 @@
 #pragma comment(lib, "ThirdParty/FBX SDK/lib/x64/release/libxml2-md.lib")
 #pragma comment(lib, "ThirdParty/FBX SDK/lib/x64/release/zlib-md.lib")
 #endif
-#pragma comment(linker, "/ignore:4099")
-
 
 FFBXSDKContext::~FFBXSDKContext()
 {
