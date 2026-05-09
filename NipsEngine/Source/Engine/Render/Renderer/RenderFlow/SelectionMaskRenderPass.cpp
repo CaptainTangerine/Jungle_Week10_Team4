@@ -77,6 +77,11 @@ bool FSelectionMaskRenderPass::DrawCommand(const FRenderPassContext* Context)
             continue;
         }
 
+        if (!UpdateRenderCommandDynamicVertices(Cmd, Context->Device, Context->DeviceContext))
+        {
+            continue;
+        }
+
         uint32 offset = 0;
         ID3D11Buffer* vertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
         if (vertexBuffer == nullptr)

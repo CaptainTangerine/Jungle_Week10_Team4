@@ -493,6 +493,8 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     <ClCompile Include="Source\Engine\Asset\FontAtlasLoader.cpp" />
     <ClCompile Include="Source\Engine\Asset\ObjLoader.cpp" />
     <ClCompile Include="Source\Engine\Asset\ParticleAtlasLoader.cpp" />
+    <ClCompile Include="Source\Engine\Asset\Skeleton.cpp" />
+    <ClCompile Include="Source\Engine\Asset\SkeletalMesh.cpp" />
     <ClCompile Include="Source\Engine\Asset\StaticMesh.cpp" />
     <ClCompile Include="Source\Engine\Asset\StaticMeshSimplifier.cpp" />
     <ClCompile Include="Source\Engine\Collision\CollisionSystem.cpp" />
@@ -509,6 +511,7 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     <ClCompile Include="Source\Engine\Component\PrimitiveComponent.cpp" />
     <ClCompile Include="Source\Engine\Component\SceneComponent.cpp" />
     <ClCompile Include="Source\Engine\Component\ShapeComponent.cpp" />
+    <ClCompile Include="Source\Engine\Component\SkeletalMeshComponent.cpp" />
     <ClCompile Include="Source\Engine\Component\SpringArmComponent.cpp" />
     <ClCompile Include="Source\Engine\Component\SkyAtmosphereComponent.cpp" />
     <ClCompile Include="Source\Engine\Component\StaticMeshComponent.cpp" />
@@ -845,6 +848,8 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     <ClInclude Include="Source\Engine\Asset\ObjRawTypes.h" />
     <ClInclude Include="Source\Engine\Asset\ParticleAtlasLoader.h" />
     <ClInclude Include="Source\Engine\Asset\RawMeshTypes.h" />
+    <ClInclude Include="Source\Engine\Asset\Skeleton.h" />
+    <ClInclude Include="Source\Engine\Asset\SkeletalMesh.h" />
     <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h" />
     <ClInclude Include="Source\Engine\Asset\StaticMesh.h" />
     <ClInclude Include="Source\Engine\Asset\StaticMeshSimplifier.h" />
@@ -863,6 +868,7 @@ xcopy /y /d "$(ProjectDir)ThirdParty\FBXSDK\$(Configuration)\libfbxsdk.dll" "$(O
     <ClInclude Include="Source\Engine\Component\PrimitiveComponent.h" />
     <ClInclude Include="Source\Engine\Component\SceneComponent.h" />
     <ClInclude Include="Source\Engine\Component\ShapeComponent.h" />
+    <ClInclude Include="Source\Engine\Component\SkeletalMeshComponent.h" />
     <ClInclude Include="Source\Engine\Component\SpringArmComponent.h" />
     <ClInclude Include="Source\Engine\Component\SkyAtmosphereComponent.h" />
     <ClInclude Include="Source\Engine\Component\StaticMeshComponent.h" />

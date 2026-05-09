@@ -38,8 +38,7 @@ FbxScene* FFbxManagerWrapper::LoadFbxScene(const std::string& FilePath)
     FbxScene* Scene = FbxScene::Create(m_SdkManager, "");
     Importer->Import(Scene);
     Importer->Destroy(); // 읽었으면 임포터는 바로 날립니다.
-
-    // 🚨 함정 1: N-Gon (다각형) 문제 방어
+    
     // 모든 폴리곤을 강제로 삼각형(Triangulate)으로 쪼갬
     FbxGeometryConverter GeometryConverter(m_SdkManager);
     GeometryConverter.Triangulate(Scene, true);

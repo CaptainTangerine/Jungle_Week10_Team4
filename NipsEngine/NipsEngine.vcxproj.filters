@@ -327,6 +327,12 @@
     <ClCompile Include="Source\Engine\Asset\ParticleAtlasLoader.cpp">
       <Filter>Source\Engine\Asset</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Asset\Skeleton.cpp">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Asset\SkeletalMesh.cpp">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Asset\StaticMesh.cpp">
       <Filter>Source\Engine\Asset</Filter>
     </ClCompile>
@@ -370,6 +376,9 @@
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\SpringArmComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Component\SkeletalMeshComponent.cpp">
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\Component\SkyAtmosphereComponent.cpp">
@@ -1016,6 +1025,12 @@
     <ClInclude Include="Source\Engine\Asset\RawMeshTypes.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\Skeleton.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Asset\SkeletalMesh.h">
+      <Filter>Source\Engine\Asset</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\Asset\StaticMesh.h">
       <Filter>Source\Engine\Asset</Filter>
     </ClInclude>
@@ -1062,6 +1077,9 @@
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\SceneComponent.h">
+      <Filter>Source\Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\SkeletalMeshComponent.h">
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\SpringArmComponent.h">

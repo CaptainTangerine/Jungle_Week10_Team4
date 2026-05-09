@@ -9,6 +9,7 @@
 #include "Component/Light/PointLightComponent.h"
 #include "Component/Light/SpotLightComponent.h"
 #include "Component/SkyAtmosphereComponent.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -67,6 +68,9 @@ REGISTER_FACTORY(ASceneActor)
 
 DEFINE_CLASS(AStaticMeshActor, AActor)
 REGISTER_FACTORY(AStaticMeshActor)
+
+DEFINE_CLASS(ASkeletalMeshActor, AActor)
+REGISTER_FACTORY(ASkeletalMeshActor)
 
 DEFINE_CLASS(AWaterActor, AActor)
 REGISTER_FACTORY(AWaterActor)
@@ -129,6 +133,12 @@ void AStaticMeshActor::InitDefaultComponents()
 {
     auto* StaticMesh = AddComponent<UStaticMeshComponent>();
     SetRootComponent(StaticMesh);
+}
+
+void ASkeletalMeshActor::InitDefaultComponents()
+{
+    auto* SkeletalMesh = AddComponent<USkeletalMeshComponent>();
+    SetRootComponent(SkeletalMesh);
 }
 
 void AWaterActor::InitDefaultComponents()

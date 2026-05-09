@@ -12,7 +12,6 @@
 #endif
 #include "Core/Logging/Log.h"
 
-#include "DDSTextureLoader.h"
 #include "SimpleJSON/json.hpp"
 #include "WICTextureLoader.h"
 
@@ -2737,6 +2736,65 @@ UStaticMesh* FResourceManager::FindStaticMesh(const FString& Path) const
 {
     auto It = StaticMeshes.find(Path);
     if (It == StaticMeshes.end())
+    {
+        return nullptr;
+    }
+
+    return It->second;
+}
+
+USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path)
+{
+    if (USkeletalMesh* FoundMesh = FindSkeletalMesh(Path))
+    {
+        return FoundMesh;
+    }
+
+    FFbxManagerWrapper& FbxManager = FFbxManagerWrapper::Get();
+    FbxManager.Initialize();
+
+    FbxScene* Scene = FbxManager.LoadFbxScene(Path);
+    if (Scene == nullptr)
+    {
+        UE_LOG("[SkeletalMeshLoad] Failed | Path=%s", Path.c_str());
+        return nullptr;
+    }
+
+    FFbxImporter FbxImporter;
+    USkeletalMesh* LoadedMesh = FbxImporter.ImportSkeletalMeshAsset(Scene);
+    Scene->Destroy();
+
+    if (LoadedMesh == nullptr || !LoadedMesh->HasValidMeshData())
+    {
+        UE_LOG("[SkeletalMeshLoad] Failed | Path=%s", Path.c_str());
+        if (LoadedMesh != nullptr)
+        {
+            UObjectManager::Get().DestroyObject(LoadedMesh);
+        }
+        return nullptr;
+    }
+
+    if (FSkeletalMesh* MeshData = LoadedMesh->GetMeshData())
+    {
+        MeshData->PathFileName = Path;
+        for (FStaticMeshMaterialSlot& Slot : MeshData->Slots)
+        {
+            Slot.Material = GetMaterial(Slot.SlotName);
+            if (Slot.Material == nullptr)
+            {
+                Slot.Material = GetMaterial("DefaultWhite");
+            }
+        }
+    }
+
+    SkeletalMeshes.insert({ Path, LoadedMesh });
+    return LoadedMesh;
+}
+
+USkeletalMesh* FResourceManager::FindSkeletalMesh(const FString& Path) const
+{
+    auto It = SkeletalMeshes.find(Path);
+    if (It == SkeletalMeshes.end())
     {
         return nullptr;
     }

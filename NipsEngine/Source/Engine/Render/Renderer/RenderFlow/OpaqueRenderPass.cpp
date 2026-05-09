@@ -209,6 +209,11 @@ bool FOpaqueRenderPass::DrawCommand(const FRenderPassContext* Context)
             return false;
         }
 
+        if (!UpdateRenderCommandDynamicVertices(Cmd, Context->Device, Context->DeviceContext))
+        {
+            return false;
+        }
+
         uint32 offset = 0;
         ID3D11Buffer* vertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
         if (vertexBuffer == nullptr)

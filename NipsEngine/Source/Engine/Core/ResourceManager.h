@@ -4,6 +4,7 @@
 #include "Asset/FontAtlasLoader.h"
 #include "Asset/ObjLoader.h"
 #include "Asset/ParticleAtlasLoader.h"
+#include "Asset/SkeletalMesh.h"
 #include "Asset/StaticMesh.h"
 #include "Core/Containers/Set.h"
 #include "Core/CoreTypes.h"
@@ -146,6 +147,8 @@ public:
     UStaticMesh* LoadStaticMesh(const FString& Path, bool bNormalizeToUnitCube);
     UStaticMesh* FindStaticMesh(const FString& Path) const;
     TArray<FString> GetStaticMeshPaths() const;
+    USkeletalMesh* LoadSkeletalMesh(const FString& Path);
+    USkeletalMesh* FindSkeletalMesh(const FString& Path) const;
 
     ID3D11SamplerState* GetOrCreateSamplerState(ESamplerType Type, ID3D11Device* Device = nullptr);
     ID3D11DepthStencilState* GetOrCreateDepthStencilState(EDepthStencilType Type, ID3D11Device* Device = nullptr);
@@ -217,6 +220,7 @@ private:
     TComPtr<ID3D11Texture2D>          DefaultNormalTexture;
 
     TMap<FString, UStaticMesh*> StaticMeshes;
+    TMap<FString, USkeletalMesh*> SkeletalMeshes;
     TMap<FString, UShader*> Shaders;
     TMap<FShaderCompileKey, UShader*> ShaderVariants;
 

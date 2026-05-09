@@ -72,6 +72,9 @@ bool FToonOutlineRenderPass::DrawCommand(const FRenderPassContext* Context)
         if (Cmd.MeshBuffer == nullptr || !Cmd.MeshBuffer->IsValid())
             return false;
 
+        if (!UpdateRenderCommandDynamicVertices(Cmd, Context->Device, Context->DeviceContext))
+            return false;
+
         uint32 offset = 0;
         ID3D11Buffer* vertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
         if (vertexBuffer == nullptr)

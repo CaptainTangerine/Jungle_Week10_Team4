@@ -117,6 +117,11 @@ bool FDepthPrepassRenderPass::DrawCommand(const FRenderPassContext* Context)
             continue;
         }
 
+        if (!UpdateRenderCommandDynamicVertices(Cmd, Context->Device, DeviceContext))
+        {
+            continue;
+        }
+
         ID3D11Buffer* VertexBuffer = Cmd.MeshBuffer->GetVertexBuffer().GetBuffer();
         const uint32 VertexCount = Cmd.MeshBuffer->GetVertexBuffer().GetVertexCount();
         const uint32 Stride = Cmd.MeshBuffer->GetVertexBuffer().GetStride();

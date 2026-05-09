@@ -6,6 +6,7 @@
 #include "Component/PrimitiveComponent.h"
 #include "Component/SkyAtmosphereComponent.h"
 #include "Component/ShapeComponent.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -599,6 +600,63 @@ void FPrimitiveRenderCollector::CollectFromComponent(
                 OutlineCmd.PerObjectConstants = FPerObjectConstants{
                     Primitive->GetWorldMatrix()
                 };
+                OutlineCmd.SectionIndexStart = Section.StartIndex;
+                OutlineCmd.SectionIndexCount = Section.IndexCount;
+                OutlineCmd.Material = Material;
+
+                RenderBus.AddCommand(ERenderPass::ToonOutline, OutlineCmd);
+            }
+        }
+
+        break;
+    }
+
+    case EPrimitiveType::EPT_SkeletalMesh:
+    {
+        if (!ShowFlags.bPrimitives) return;
+
+        USkeletalMeshComponent* SkeletalMeshComp = static_cast<USkeletalMeshComponent*>(Primitive);
+        const FSkeletalMesh* SkeletalMesh = SkeletalMeshComp->GetSkeletalMeshData();
+
+        if (!SkeletalMesh || SkeletalMesh->Vertices.empty() || SkeletalMesh->Indices.empty()) return;
+
+        const TArray<FNormalVertex>& SkinnedVertices = SkeletalMeshComp->GetSkinnedVertices();
+
+        FMeshBuffer* MeshBuffer = MeshBufferManager->GetSkeletalMeshBuffer(SkeletalMeshComp);
+        if (!MeshBuffer) return;
+
+        const TArray<FStaticMeshSection>& Sections = SkeletalMesh->Sections;
+        for (int32 SectionIdx = 0; SectionIdx < static_cast<int32>(Sections.size()); ++SectionIdx)
+        {
+            const FStaticMeshSection& Section = Sections[SectionIdx];
+            UMaterialInterface* Material = Cast<UMaterialInterface>(SkeletalMeshComp->GetMaterial(SectionIdx));
+            if (Material == nullptr)
+            {
+                Material = FResourceManager::Get().GetMaterial("DefaultWhite");
+                if (Material == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            FRenderCommand Cmd = {};
+            Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
+            Cmd.Type = ERenderCommandType::StaticMesh;
+            Cmd.MeshBuffer = MeshBuffer;
+            Cmd.DynamicVertices = &SkinnedVertices;
+            Cmd.SectionIndexStart = Section.StartIndex;
+            Cmd.SectionIndexCount = Section.IndexCount;
+            Cmd.Material = Material;
+
+            RenderBus.AddCommand(ERenderPass::Opaque, Cmd);
+
+            if (Material->GetEffectiveLightingModel() == ELightingModel::Toon)
+            {
+                FRenderCommand OutlineCmd = {};
+                OutlineCmd.Type = ERenderCommandType::ToonOutline;
+                OutlineCmd.MeshBuffer = MeshBuffer;
+                OutlineCmd.DynamicVertices = &SkinnedVertices;
+                OutlineCmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix() };
                 OutlineCmd.SectionIndexStart = Section.StartIndex;
                 OutlineCmd.SectionIndexCount = Section.IndexCount;
                 OutlineCmd.Material = Material;

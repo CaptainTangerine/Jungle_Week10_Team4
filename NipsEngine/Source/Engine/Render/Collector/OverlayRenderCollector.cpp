@@ -3,6 +3,7 @@
 #include "Component/BillboardComponent.h"
 #include "Component/GizmoComponent.h"
 #include "Component/PrimitiveComponent.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -228,6 +229,11 @@ bool FOverlayRenderCollector::CollectFromSelectedActor(
             auto* StaticMeshComp = static_cast<UStaticMeshComponent*>(primitiveComponent);
             MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMeshComp->GetStaticMesh());
         }
+        else if (primitiveComponent->GetPrimitiveType() == EPrimitiveType::EPT_SkeletalMesh)
+        {
+            auto* SkeletalMeshComp = static_cast<USkeletalMeshComponent*>(primitiveComponent);
+            MeshBuffer = MeshBufferManager->GetSkeletalMeshBuffer(SkeletalMeshComp);
+        }
         else
         {
             MeshBuffer = &MeshBufferManager->GetMeshBuffer(primitiveComponent->GetPrimitiveType());
@@ -240,6 +246,11 @@ bool FOverlayRenderCollector::CollectFromSelectedActor(
 
         FRenderCommand BaseCmd{};
         BaseCmd.MeshBuffer = MeshBuffer;
+        if (primitiveComponent->GetPrimitiveType() == EPrimitiveType::EPT_SkeletalMesh)
+        {
+            auto* SkeletalMeshComp = static_cast<USkeletalMeshComponent*>(primitiveComponent);
+            BaseCmd.DynamicVertices = &SkeletalMeshComp->GetSkinnedVertices();
+        }
         BaseCmd.PerObjectConstants = FPerObjectConstants(primitiveComponent->GetWorldMatrix());
         BaseCmd.SectionIndexStart = 0;
         BaseCmd.SectionIndexCount = MeshBuffer->GetIndexBuffer().GetIndexCount();

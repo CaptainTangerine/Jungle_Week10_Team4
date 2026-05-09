@@ -18,11 +18,15 @@ void FVertexBuffer::SetRaw(ID3D11Buffer* InBuffer, uint32 InVertexCount, uint32 
     Buffer.Attach(InBuffer);
     VertexCount = InVertexCount;
     Stride      = InStride;
+    bDynamic    = false;
 }
 
 void FVertexBuffer::Release()
 {
     Buffer.Reset();
+    VertexCount = 0;
+    Stride = 0;
+    bDynamic = false;
 }
 
 ID3D11Buffer* FVertexBuffer::GetBuffer() const

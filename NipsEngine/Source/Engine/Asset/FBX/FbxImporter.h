@@ -6,6 +6,8 @@
 #include "Asset/StaticMeshTypes.h"
 #include "Core/Containers/Map.h"
 
+class USkeletalMesh;
+
 class FFbxImporter
 {
 public:
@@ -16,6 +18,7 @@ public:
     bool ImportStaticMesh(FbxScene* Scene, FStaticMesh& OutStaticMesh);
     FSkeletalMesh* ImportSkeletalMesh(FbxScene* Scene);
     bool ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeletalMesh);
+    USkeletalMesh* ImportSkeletalMeshAsset(FbxScene* Scene);
 
 private:
     struct FVertexKey
@@ -82,6 +85,8 @@ private:
     uint32 GetOrCreateVertexIndex(const FNormalVertex& Vertex, FStaticMesh& OutStaticMesh);
     uint32 GetOrCreateSkeletalVertexIndex(const FSkeletalVertex& Vertex, FSkeletalMesh& OutSkeletalMesh);
     uint32 GetOrCreateBoneIndex(FbxNode* BoneNode, FSkeletalMesh& OutSkeletalMesh);
+    void SetBoneGlobalBindPose(FbxNode* BoneNode, const FMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh);
+    void RefreshBoneLocalBindPoses(FSkeletalMesh& OutSkeletalMesh);
     TArray<FControlPointSkinData> BuildControlPointSkinData(FbxMesh* Mesh, FSkeletalMesh& OutSkeletalMesh);
     void NormalizeControlPointSkinData(TArray<FControlPointSkinData>& ControlPointSkinData) const;
 
@@ -98,4 +103,5 @@ private:
     TMap<FVertexKey, uint32, FVertexKeyHasher> UniqueVertices;
     TMap<FSkeletalVertexKey, uint32, FSkeletalVertexKeyHasher> UniqueSkeletalVertices;
     TMap<FbxNode*, uint32> BoneIndexByNode;
+    TMap<FbxNode*, FMatrix> BoneGlobalBindPoseByNode;
 };

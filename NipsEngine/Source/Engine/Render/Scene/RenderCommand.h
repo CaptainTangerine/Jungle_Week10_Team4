@@ -350,6 +350,7 @@ struct FRenderCommand
 
     //	VB, IB 모두 담고 있는 MB
     FMeshBuffer* MeshBuffer = nullptr;
+    const TArray<FNormalVertex>* DynamicVertices = nullptr;
     UMaterialInterface* Material = nullptr;
     uint32 SectionIndexStart = 0;
     uint32 SectionIndexCount = 0;
@@ -371,3 +372,21 @@ struct FRenderCommand
 
     ERenderCommandType Type = ERenderCommandType::Primitive;
 };
+
+inline bool UpdateRenderCommandDynamicVertices(
+    const FRenderCommand& Cmd,
+    ID3D11Device* Device,
+    ID3D11DeviceContext* DeviceContext)
+{
+    if (Cmd.DynamicVertices == nullptr)
+    {
+        return true;
+    }
+
+    if (Cmd.MeshBuffer == nullptr)
+    {
+        return false;
+    }
+
+    return Cmd.MeshBuffer->UpdateDynamicVertices(Device, DeviceContext, *Cmd.DynamicVertices);
+}

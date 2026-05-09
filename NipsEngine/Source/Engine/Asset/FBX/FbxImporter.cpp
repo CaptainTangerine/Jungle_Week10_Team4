@@ -1,6 +1,8 @@
 #include "FbxImporter.h"
 
+#include "Asset/SkeletalMesh.h"
 #include "Math/Utils.h"
+#include "Object/Object.h"
 
 #include <algorithm>
 
@@ -170,11 +172,25 @@ FSkeletalMesh* FFbxImporter::ImportSkeletalMesh(FbxScene* Scene)
     return SkeletalMesh;
 }
 
+USkeletalMesh* FFbxImporter::ImportSkeletalMeshAsset(FbxScene* Scene)
+{
+    FSkeletalMesh* SkeletalMeshData = ImportSkeletalMesh(Scene);
+    if (SkeletalMeshData == nullptr)
+    {
+        return nullptr;
+    }
+
+    USkeletalMesh* SkeletalMesh = UObjectManager::Get().CreateObject<USkeletalMesh>();
+    SkeletalMesh->SetMeshData(SkeletalMeshData);
+    return SkeletalMesh;
+}
+
 bool FFbxImporter::ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeletalMesh)
 {
     ResetSkeletalMesh(OutSkeletalMesh);
     UniqueSkeletalVertices.clear();
     BoneIndexByNode.clear();
+    BoneGlobalBindPoseByNode.clear();
 
     if (Scene == nullptr || Scene->GetRootNode() == nullptr)
     {
@@ -190,6 +206,7 @@ bool FFbxImporter::ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeleta
     }
 
     ProcessSkeletalNode(Scene->GetRootNode(), OutSkeletalMesh);
+    RefreshBoneLocalBindPoses(OutSkeletalMesh);
 
     if (OutSkeletalMesh.Vertices.empty() || OutSkeletalMesh.Indices.empty())
     {
@@ -199,6 +216,7 @@ bool FFbxImporter::ImportSkeletalMesh(FbxScene* Scene, FSkeletalMesh& OutSkeleta
     BuildDefaultSection(OutSkeletalMesh);
     BuildTangentsAndBitangents(OutSkeletalMesh);
     OutSkeletalMesh.LocalBounds = BuildLocalBounds(OutSkeletalMesh);
+    OutSkeletalMesh.RebuildDerivedData();
 
     return true;
 }
@@ -491,28 +509,121 @@ uint32 FFbxImporter::GetOrCreateBoneIndex(FbxNode* BoneNode, FSkeletalMesh& OutS
         return It->second;
     }
 
-    FSkeletonBone Bone = {};
-    Bone.Name = BoneNode->GetName() != nullptr ? FString(BoneNode->GetName()) : FString();
-    Bone.BindPose = ToMatrix(BoneNode->EvaluateGlobalTransform());
-    if (Bone.BindPose.IsInvertible())
-    {
-        Bone.InverseBindPose = Bone.BindPose.GetInverse();
-    }
-
+    int32 ParentIndex = -1;
     for (FbxNode* ParentNode = BoneNode->GetParent(); ParentNode != nullptr; ParentNode = ParentNode->GetParent())
     {
-        auto ParentIt = BoneIndexByNode.find(ParentNode);
-        if (ParentIt != BoneIndexByNode.end())
+        FbxNodeAttribute* ParentAttribute = ParentNode->GetNodeAttribute();
+        const bool bParentIsSkeleton =
+            ParentAttribute != nullptr && ParentAttribute->GetAttributeType() == FbxNodeAttribute::eSkeleton;
+        if (bParentIsSkeleton || BoneIndexByNode.find(ParentNode) != BoneIndexByNode.end())
         {
-            Bone.ParentIndex = static_cast<int32>(ParentIt->second);
+            ParentIndex = static_cast<int32>(GetOrCreateBoneIndex(ParentNode, OutSkeletalMesh));
             break;
         }
+    }
+
+    FSkeletonBone Bone = {};
+    Bone.Name = BoneNode->GetName() != nullptr ? FString(BoneNode->GetName()) : FString();
+    Bone.ParentIndex = ParentIndex;
+
+    const FMatrix GlobalBindPose = ToMatrix(BoneNode->EvaluateGlobalTransform());
+    Bone.BindPose = GlobalBindPose;
+    if (ParentIndex >= 0 && ParentIndex < static_cast<int32>(OutSkeletalMesh.Bones.size()))
+    {
+        FbxNode* ParentNode = BoneNode->GetParent();
+        while (ParentNode != nullptr && BoneIndexByNode.find(ParentNode) == BoneIndexByNode.end())
+        {
+            ParentNode = ParentNode->GetParent();
+        }
+
+        auto ParentGlobalIt = ParentNode != nullptr ? BoneGlobalBindPoseByNode.find(ParentNode) : BoneGlobalBindPoseByNode.end();
+        const FMatrix ParentGlobalBindPose =
+            ParentGlobalIt != BoneGlobalBindPoseByNode.end()
+            ? ParentGlobalIt->second
+            : OutSkeletalMesh.Bones[ParentIndex].BindPose;
+
+        Bone.BindPose = GlobalBindPose * ParentGlobalBindPose.GetInverse();
+    }
+
+    if (GlobalBindPose.IsInvertible())
+    {
+        Bone.InverseBindPose = GlobalBindPose.GetInverse();
     }
 
     const uint32 NewIndex = static_cast<uint32>(OutSkeletalMesh.Bones.size());
     OutSkeletalMesh.Bones.push_back(Bone);
     BoneIndexByNode.emplace(BoneNode, NewIndex);
+    BoneGlobalBindPoseByNode.emplace(BoneNode, GlobalBindPose);
     return NewIndex;
+}
+
+void FFbxImporter::SetBoneGlobalBindPose(FbxNode* BoneNode, const FMatrix& GlobalBindPose, FSkeletalMesh& OutSkeletalMesh)
+{
+    if (BoneNode == nullptr)
+    {
+        return;
+    }
+
+    const uint32 BoneIndex = GetOrCreateBoneIndex(BoneNode, OutSkeletalMesh);
+    BoneGlobalBindPoseByNode[BoneNode] = GlobalBindPose;
+
+    FSkeletonBone& Bone = OutSkeletalMesh.Bones[BoneIndex];
+    if (GlobalBindPose.IsInvertible())
+    {
+        Bone.InverseBindPose = GlobalBindPose.GetInverse();
+    }
+}
+
+void FFbxImporter::RefreshBoneLocalBindPoses(FSkeletalMesh& OutSkeletalMesh)
+{
+    for (const auto& Pair : BoneIndexByNode)
+    {
+        FbxNode* BoneNode = Pair.first;
+        const uint32 BoneIndex = Pair.second;
+        if (BoneNode == nullptr || BoneIndex >= OutSkeletalMesh.Bones.size())
+        {
+            continue;
+        }
+
+        auto GlobalIt = BoneGlobalBindPoseByNode.find(BoneNode);
+        const FMatrix GlobalBindPose =
+            GlobalIt != BoneGlobalBindPoseByNode.end()
+            ? GlobalIt->second
+            : ToMatrix(BoneNode->EvaluateGlobalTransform());
+
+        FSkeletonBone& Bone = OutSkeletalMesh.Bones[BoneIndex];
+        if (GlobalBindPose.IsInvertible())
+        {
+            Bone.InverseBindPose = GlobalBindPose.GetInverse();
+        }
+
+        Bone.BindPose = GlobalBindPose;
+        if (Bone.ParentIndex < 0 || Bone.ParentIndex >= static_cast<int32>(OutSkeletalMesh.Bones.size()))
+        {
+            continue;
+        }
+
+        FbxNode* ParentNode = BoneNode->GetParent();
+        while (ParentNode != nullptr)
+        {
+            auto ParentIndexIt = BoneIndexByNode.find(ParentNode);
+            if (ParentIndexIt != BoneIndexByNode.end() &&
+                static_cast<int32>(ParentIndexIt->second) == Bone.ParentIndex)
+            {
+                break;
+            }
+
+            ParentNode = ParentNode->GetParent();
+        }
+
+        auto ParentGlobalIt = ParentNode != nullptr ? BoneGlobalBindPoseByNode.find(ParentNode) : BoneGlobalBindPoseByNode.end();
+        const FMatrix ParentGlobalBindPose =
+            ParentGlobalIt != BoneGlobalBindPoseByNode.end()
+            ? ParentGlobalIt->second
+            : OutSkeletalMesh.Bones[Bone.ParentIndex].BindPose;
+
+        Bone.BindPose = GlobalBindPose * ParentGlobalBindPose.GetInverse();
+    }
 }
 
 TArray<FFbxImporter::FControlPointSkinData> FFbxImporter::BuildControlPointSkinData(FbxMesh* Mesh, FSkeletalMesh& OutSkeletalMesh)
@@ -543,14 +654,10 @@ TArray<FFbxImporter::FControlPointSkinData> FFbxImporter::BuildControlPointSkinD
                 continue;
             }
 
-            const uint32 BoneIndex = GetOrCreateBoneIndex(Cluster->GetLink(), OutSkeletalMesh);
-
-            FbxAMatrix MeshBindMatrix;
             FbxAMatrix LinkBindMatrix;
-            Cluster->GetTransformMatrix(MeshBindMatrix);
             Cluster->GetTransformLinkMatrix(LinkBindMatrix);
-            OutSkeletalMesh.Bones[BoneIndex].BindPose = ToMatrix(LinkBindMatrix);
-            OutSkeletalMesh.Bones[BoneIndex].InverseBindPose = ToMatrix(LinkBindMatrix.Inverse() * MeshBindMatrix);
+            const uint32 BoneIndex = GetOrCreateBoneIndex(Cluster->GetLink(), OutSkeletalMesh);
+            SetBoneGlobalBindPose(Cluster->GetLink(), ToMatrix(LinkBindMatrix), OutSkeletalMesh);
 
             const int32 InfluenceCount = Cluster->GetControlPointIndicesCount();
             int* ControlPointIndices = Cluster->GetControlPointIndices();
@@ -650,6 +757,8 @@ void FFbxImporter::ResetSkeletalMesh(FSkeletalMesh& OutSkeletalMesh) const
     OutSkeletalMesh.Sections.clear();
     OutSkeletalMesh.Slots.clear();
     OutSkeletalMesh.Bones.clear();
+    OutSkeletalMesh.RefSkeleton.Reset();
+    OutSkeletalMesh.SkinWeightVertexBuffer.Reset();
     OutSkeletalMesh.LocalBounds.Reset();
     OutSkeletalMesh.RenderData.VertexBuffer = nullptr;
     OutSkeletalMesh.RenderData.IndexBuffer = nullptr;

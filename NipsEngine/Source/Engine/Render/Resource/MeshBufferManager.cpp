@@ -2,6 +2,7 @@
 
 #include "Asset/SkeletalMeshTypes.h"
 #include "Asset/StaticMesh.h"
+#include "Component/SkeletalMeshComponent.h"
 
 void FMeshBufferManager::Create(ID3D11Device* InDevice)
 {
@@ -114,21 +115,36 @@ FMeshBuffer* FMeshBufferManager::GetStaticMeshBuffer(const UStaticMesh* StaticMe
     return &NewBuffer;
 }
 
-FMeshBuffer* FMeshBufferManager::GetSkeletalMeshBuffer(const FSkeletalMesh* SkeletalMesh)
+FMeshBuffer* FMeshBufferManager::GetSkeletalMeshBuffer(const USkeletalMeshComponent* SkeletalMeshComponent)
 {
-    if (!Device || SkeletalMesh == nullptr || SkeletalMesh->Vertices.empty() || SkeletalMesh->Indices.empty())
+    if (!Device || SkeletalMeshComponent == nullptr || !SkeletalMeshComponent->HasValidMesh())
     {
         return nullptr;
     }
 
-    auto It = SkeletalMeshBufferMap.find(SkeletalMesh);
+    const FSkeletalMesh* SkeletalMesh = SkeletalMeshComponent->GetSkeletalMeshData();
+    const TArray<FNormalVertex>& Vertices = SkeletalMeshComponent->GetSkinnedVertices();
+    const TArray<uint32>& Indices = SkeletalMesh->Indices;
+    if (Vertices.empty() || Indices.empty())
+    {
+        return nullptr;
+    }
+
+    auto It = SkeletalMeshBufferMap.find(SkeletalMeshComponent);
     if (It != SkeletalMeshBufferMap.end())
     {
+        const bool bSameVertexCount = It->second.GetVertexBuffer().GetVertexCount() == static_cast<uint32>(Vertices.size());
+        const bool bSameIndexCount = It->second.GetIndexBuffer().GetIndexCount() == static_cast<uint32>(Indices.size());
+        if (!bSameVertexCount || !bSameIndexCount)
+        {
+            It->second.Release();
+            It->second.CreateDynamic(Device, Vertices, Indices);
+        }
         return &It->second;
     }
 
-    FMeshBuffer& NewBuffer = SkeletalMeshBufferMap[SkeletalMesh];
-    NewBuffer.Create(Device, SkeletalMesh->Vertices, SkeletalMesh->Indices);
+    FMeshBuffer& NewBuffer = SkeletalMeshBufferMap[SkeletalMeshComponent];
+    NewBuffer.CreateDynamic(Device, Vertices, Indices);
 
     return &NewBuffer;
 }
