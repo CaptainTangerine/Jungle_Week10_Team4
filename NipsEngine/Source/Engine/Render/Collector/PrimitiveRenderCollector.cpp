@@ -27,6 +27,9 @@
 #include <chrono>
 #include <unordered_set>
 
+#include "Asset/SkeletalMesh.h"
+#include "Component/SkeletalMeshComponent.h"
+
 namespace
 {
     struct FResolvedWaterTextures
@@ -481,6 +484,69 @@ namespace
 
         return MaxLOD;
     }
+
+    void BuildCpuSkinnedVertices(const USkeletalMeshComponent* SkeletalMeshComp, TArray<FNormalVertex>& OutVertices)
+    {
+        OutVertices.clear();
+
+        if (SkeletalMeshComp == nullptr)
+        {
+            return;
+        }
+
+        const USkeletalMesh* SkeletalMesh = SkeletalMeshComp->GetSkeletalMesh();
+        if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData())
+        {
+            return;
+        }
+
+        const TArray<FbxVertex>& SourceVertices = SkeletalMesh->GetVertices();
+        const TArray<FMatrix>& SkinMatrices = SkeletalMeshComp->GetSkinMatrices();
+        const FColor White(1.0f, 1.0f, 1.0f, 1.0f);
+
+        OutVertices.reserve(SourceVertices.size());
+
+        for (const FbxVertex& SourceVertex : SourceVertices)
+        {
+            FVector SkinnedPosition = FVector::ZeroVector;
+            FVector SkinnedNormal = FVector::ZeroVector;
+            float TotalWeight = 0.0f;
+
+            for (int32 InfluenceIndex = 0; InfluenceIndex < 4; ++InfluenceIndex)
+            {
+                const int32 BoneIndex = SourceVertex.BoneIndices[InfluenceIndex];
+                const float Weight = SourceVertex.BoneWeights[InfluenceIndex];
+                if (Weight <= 0.0f || BoneIndex < 0 || BoneIndex >= static_cast<int32>(SkinMatrices.size()))
+                {
+                    continue;
+                }
+
+                const FMatrix& SkinMatrix = SkinMatrices[BoneIndex];
+                SkinnedPosition += SkinMatrix.TransformPosition(SourceVertex.Position) * Weight;
+                SkinnedNormal += SkinMatrix.TransformVector(SourceVertex.Normal) * Weight;
+                TotalWeight += Weight;
+            }
+
+            if (TotalWeight <= 0.0f)
+            {
+                SkinnedPosition = SourceVertex.Position;
+                SkinnedNormal = SourceVertex.Normal;
+            }
+            else if (TotalWeight < 0.999f || TotalWeight > 1.001f)
+            {
+                SkinnedPosition /= TotalWeight;
+                SkinnedNormal /= TotalWeight;
+            }
+
+            FNormalVertex SkinnedVertex = {};
+            SkinnedVertex.Position = SkinnedPosition;
+            SkinnedVertex.Color = White;
+            SkinnedVertex.Normal = SkinnedNormal.GetSafeNormal();
+            SkinnedVertex.UVs = SourceVertex.UV;
+
+            OutVertices.push_back(SkinnedVertex);
+        }
+    }
 }
 
 void FPrimitiveRenderCollector::CollectFromActor(
@@ -609,6 +675,68 @@ void FPrimitiveRenderCollector::CollectFromComponent(
 
         break;
     }
+    
+    case EPrimitiveType::EPT_SkeletalMesh:
+    {
+        if (!ShowFlags.bPrimitives) return;
+
+        USkeletalMeshComponent* SkeletalMeshComp = static_cast<USkeletalMeshComponent*>(Primitive);
+        const USkeletalMesh* SkeletalMesh = SkeletalMeshComp->GetSkeletalMesh();
+
+        if (!SkeletalMesh || !SkeletalMesh->HasValidMeshData()) return;
+
+        TArray<FNormalVertex> SkinnedVertices;
+        BuildCpuSkinnedVertices(SkeletalMeshComp, SkinnedVertices);
+
+        FMeshBuffer* MeshBuffer = MeshBufferManager->GetSkeletalMeshBuffer(SkeletalMesh, SkinnedVertices);
+        if (!MeshBuffer) return;
+
+        const TArray<FSKeletalMeshSection>& Sections = SkeletalMesh->GetSections();
+
+        for (int32 SectionIdx = 0; SectionIdx < static_cast<int32>(Sections.size()); ++SectionIdx)
+        {
+            const FSKeletalMeshSection& Section = Sections[SectionIdx];
+            const int32 MaterialSlotIndex = Section.MaterialSlotIndex >= 0 ? Section.MaterialSlotIndex : SectionIdx;
+            UMaterialInterface* Material = Cast<UMaterialInterface>(SkeletalMeshComp->GetMaterial(MaterialSlotIndex));
+            if (Material == nullptr)
+            {
+                Material = FResourceManager::Get().GetMaterial("DefaultWhite");
+                if (Material == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            FRenderCommand Cmd = {};
+            Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
+            Cmd.Type = ERenderCommandType::StaticMesh;
+            Cmd.MeshBuffer = MeshBuffer;
+
+            Cmd.SectionIndexStart = Section.StartIndex;
+            Cmd.SectionIndexCount = Section.IndexCount;
+            Cmd.Material = Material;
+
+            RenderBus.AddCommand(ERenderPass::Opaque, Cmd);
+
+            if (Material->GetEffectiveLightingModel() == ELightingModel::Toon)
+            {
+                FRenderCommand OutlineCmd = {};
+                OutlineCmd.Type = ERenderCommandType::ToonOutline;
+                OutlineCmd.MeshBuffer = MeshBuffer;
+                OutlineCmd.PerObjectConstants = FPerObjectConstants{
+                    Primitive->GetWorldMatrix()
+                };
+                OutlineCmd.SectionIndexStart = Section.StartIndex;
+                OutlineCmd.SectionIndexCount = Section.IndexCount;
+                OutlineCmd.Material = Material;
+
+                RenderBus.AddCommand(ERenderPass::ToonOutline, OutlineCmd);
+            }
+        }
+        break;
+    }
+        
+        
 
     case EPrimitiveType::EPT_Text:
     {

@@ -378,6 +378,9 @@
     <ClCompile Include="Source\Engine\Component\StaticMeshComponent.cpp">
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\Component\SkeletalMeshComponent.cpp">
+      <Filter>Source\Engine\Component</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Engine\Component\SubUVComponent.cpp">
       <Filter>Source\Engine\Component</Filter>
     </ClCompile>
@@ -1064,6 +1067,9 @@
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\StaticMeshComponent.h">
+      <Filter>Source\Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Component\SkeletalMeshComponent.h">
       <Filter>Source\Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\Component\SubUVComponent.h">

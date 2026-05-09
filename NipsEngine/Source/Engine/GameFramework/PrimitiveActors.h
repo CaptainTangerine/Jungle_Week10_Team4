@@ -10,6 +10,7 @@ class USubUVComponent;
 class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
+class USkeletalMeshComponent;
 class UCameraComponent;
 
 class ASceneActor : public AActor
@@ -30,6 +31,16 @@ public:
     void InitDefaultComponents();
 public:
     virtual void BeginPlay() override;
+};
+
+class ASkeletalMeshActor : public AActor
+{
+public:
+    DECLARE_CLASS(ASkeletalMeshActor, AActor)
+    ASkeletalMeshActor() = default;
+
+    void InitDefaultComponents();
+    USkeletalMeshComponent* GetSkeletalMeshComponent() const;
 };
 
 class AWaterActor : public AActor

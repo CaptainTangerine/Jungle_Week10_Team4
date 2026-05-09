@@ -2,16 +2,25 @@
 
 #include "Editor/EditorEngine.h"
 #include "Core/Paths.h"
+#include "Core/ResourceManager.h"
 #include "Engine/Asset/FbxLoader.h"
+#include "Engine/Asset/SkeletalMesh.h"
+#include "Engine/Asset/StaticMesh.h"
 #include "Engine/Viewport/ViewportCamera.h"
 
 #include "ImGui/imgui.h"
 #include "Component/GizmoComponent.h"
+#include "Component/SkeletalMeshComponent.h"
+#include "Component/StaticMeshComponent.h"
 
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PrimitiveActors.h"
 
 #include <commdlg.h>
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <utility>
 
 #define SEPARATOR()     \
     ;                   \
@@ -43,6 +52,7 @@ namespace
         { "Camera", SpawnActor<ACameraActor> },
         { "Cine Camera", SpawnActor<ACineCameraActor> },
         { "StaticMesh", SpawnActor<AStaticMeshActor> },
+        { "SkeletalMesh", SpawnActor<ASkeletalMeshActor> },
         { "Water", SpawnActor<AWaterActor> },
         { "Global Ocean", SpawnActor<AGlobalOceanActor> },
         { "TextRender", SpawnActor<ATextRenderActor> },
@@ -56,6 +66,209 @@ namespace
         { "Sky Atmosphere", SpawnActor<ASkyAtmosphereActor> },
         { "Height Fog", SpawnActor<AHeightFogActor> },
     };
+
+    FStaticMesh* BuildStaticPreviewMesh(const FSkeletalMeshAsset& SkeletalMeshAsset, const char* SourcePath)
+    {
+        if (SkeletalMeshAsset.Vertices.empty() || SkeletalMeshAsset.Indices.empty())
+        {
+            return nullptr;
+        }
+
+        FStaticMesh* PreviewMesh = new FStaticMesh();
+        PreviewMesh->PathFileName = SourcePath ? SourcePath : "";
+        PreviewMesh->Vertices.reserve(SkeletalMeshAsset.Vertices.size());
+        PreviewMesh->Indices = SkeletalMeshAsset.Indices;
+
+        for (const FbxVertex& SourceVertex : SkeletalMeshAsset.Vertices)
+        {
+            FNormalVertex PreviewVertex = {};
+            PreviewVertex.Position = SourceVertex.Position;
+            PreviewVertex.Normal = SourceVertex.Normal;
+            PreviewVertex.UVs = SourceVertex.UV;
+            PreviewVertex.Color = FColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+            PreviewMesh->Vertices.push_back(PreviewVertex);
+        }
+
+        if (SkeletalMeshAsset.MaterialSlots.empty())
+        {
+            FStaticMeshMaterialSlot Slot = {};
+            Slot.SlotName = "FBX Preview";
+            PreviewMesh->Slots.push_back(Slot);
+        }
+        else
+        {
+            PreviewMesh->Slots.reserve(SkeletalMeshAsset.MaterialSlots.size());
+            for (const FSkeletalMeshMaterialSlot& SourceSlot : SkeletalMeshAsset.MaterialSlots)
+            {
+                FStaticMeshMaterialSlot Slot = {};
+                Slot.SlotName = SourceSlot.SlotName;
+                PreviewMesh->Slots.push_back(Slot);
+            }
+        }
+
+        if (SkeletalMeshAsset.Sections.empty())
+        {
+            FStaticMeshSection Section = {};
+            Section.StartIndex = 0;
+            Section.IndexCount = static_cast<uint32>(PreviewMesh->Indices.size());
+            Section.MaterialSlotIndex = 0;
+            PreviewMesh->Sections.push_back(Section);
+        }
+        else
+        {
+            PreviewMesh->Sections.reserve(SkeletalMeshAsset.Sections.size());
+            const int32 MaxMaterialSlotIndex = static_cast<int32>(PreviewMesh->Slots.size()) - 1;
+
+            for (const FSKeletalMeshSection& SourceSection : SkeletalMeshAsset.Sections)
+            {
+                if (SourceSection.IndexCount == 0)
+                {
+                    continue;
+                }
+
+                FStaticMeshSection Section = {};
+                Section.StartIndex = SourceSection.StartIndex;
+                Section.IndexCount = SourceSection.IndexCount;
+                Section.MaterialSlotIndex = std::clamp(SourceSection.MaterialSlotIndex, 0, MaxMaterialSlotIndex);
+                PreviewMesh->Sections.push_back(Section);
+            }
+        }
+
+        if (PreviewMesh->Sections.empty())
+        {
+            delete PreviewMesh;
+            return nullptr;
+        }
+
+        return PreviewMesh;
+    }
+
+    UStaticMeshComponent* FindStaticMeshComponent(AActor* Actor)
+    {
+        if (Actor == nullptr)
+        {
+            return nullptr;
+        }
+
+        if (UStaticMeshComponent* RootStaticMesh = Cast<UStaticMeshComponent>(Actor->GetRootComponent()))
+        {
+            return RootStaticMesh;
+        }
+
+        for (UActorComponent* Component : Actor->GetComponents())
+        {
+            if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component))
+            {
+                return StaticMeshComponent;
+            }
+        }
+
+        return nullptr;
+    }
+
+    USkeletalMeshComponent* FindSkeletalMeshComponent(AActor* Actor)
+    {
+        if (Actor == nullptr)
+        {
+            return nullptr;
+        }
+
+        if (USkeletalMeshComponent* RootSkeletalMesh = Cast<USkeletalMeshComponent>(Actor->GetRootComponent()))
+        {
+            return RootSkeletalMesh;
+        }
+
+        for (UActorComponent* Component : Actor->GetComponents())
+        {
+            if (USkeletalMeshComponent* SkeletalMeshComponent = Cast<USkeletalMeshComponent>(Component))
+            {
+                return SkeletalMeshComponent;
+            }
+        }
+
+        return nullptr;
+    }
+
+    void RenderSkeletonBoneNode(
+        const FSkeletalMeshAsset& SkeletalMeshAsset,
+        const TArray<TArray<int32>>& ChildrenByBoneIndex,
+        int32 BoneIndex)
+    {
+        if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(SkeletalMeshAsset.Bones.size()))
+        {
+            return;
+        }
+
+        const FBone& Bone = SkeletalMeshAsset.Bones[BoneIndex];
+        const bool bHasChildren = !ChildrenByBoneIndex[BoneIndex].empty();
+
+        char Label[512] = {};
+        snprintf(
+            Label,
+            sizeof(Label),
+            "%d: %s  parent=%d",
+            BoneIndex,
+            Bone.Name.c_str(),
+            Bone.ParentIndex);
+
+        ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (!bHasChildren)
+        {
+            Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        }
+
+        const bool bOpen = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<intptr_t>(BoneIndex)), Flags, "%s", Label);
+        if (ImGui::IsItemHovered() && !Bone.PathName.empty())
+        {
+            ImGui::SetTooltip("%s", Bone.PathName.c_str());
+        }
+
+        if (bHasChildren && bOpen)
+        {
+            for (int32 ChildBoneIndex : ChildrenByBoneIndex[BoneIndex])
+            {
+                RenderSkeletonBoneNode(SkeletalMeshAsset, ChildrenByBoneIndex, ChildBoneIndex);
+            }
+            ImGui::TreePop();
+        }
+    }
+
+    void RenderSkeletonTree(const FSkeletalMeshAsset& SkeletalMeshAsset)
+    {
+        ImGui::Text("Skeleton: %zu bones", SkeletalMeshAsset.Bones.size());
+
+        if (SkeletalMeshAsset.Bones.empty())
+        {
+            ImGui::TextUnformatted("No bones parsed.");
+            return;
+        }
+
+        TArray<TArray<int32>> ChildrenByBoneIndex;
+        ChildrenByBoneIndex.resize(SkeletalMeshAsset.Bones.size());
+
+        TArray<int32> RootBoneIndices;
+        for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(SkeletalMeshAsset.Bones.size()); ++BoneIndex)
+        {
+            const int32 ParentIndex = SkeletalMeshAsset.Bones[BoneIndex].ParentIndex;
+            if (ParentIndex >= 0 && ParentIndex < static_cast<int32>(SkeletalMeshAsset.Bones.size()))
+            {
+                ChildrenByBoneIndex[ParentIndex].push_back(BoneIndex);
+            }
+            else
+            {
+                RootBoneIndices.push_back(BoneIndex);
+            }
+        }
+
+        if (ImGui::BeginChild("FbxSkeletonTree", ImVec2(0.0f, 180.0f), true))
+        {
+            for (int32 RootBoneIndex : RootBoneIndices)
+            {
+                RenderSkeletonBoneNode(SkeletalMeshAsset, ChildrenByBoneIndex, RootBoneIndex);
+            }
+        }
+        ImGui::EndChild();
+    }
 }
 
 bool FEditorControlWidget::OpenFbxFileDialog(FString& OutFilePath) const
@@ -89,6 +302,8 @@ void FEditorControlWidget::Initialize(UEditorEngine* InEditorEngine)
     SelectedPrimitiveType = 0;
     FbxImportPathBuffer[0] = '\0';
     LastFbxImportStatus.clear();
+    LastImportedFbxAsset = {};
+    bHasLastImportedFbxAsset = false;
 }
 
 // 컨트롤 패널 UI를 렌더링하고 액터 생성 및 카메라 제어 기능을 처리합니다.
@@ -163,15 +378,91 @@ void FEditorControlWidget::Render(float DeltaTime)
         }
         else
         {
+            FSkeletalMeshAsset ImportedAsset;
             FFbxLoader Loader;
-            const bool bImportSuccess = Loader.ImportFbxFile(FbxImportPathBuffer);
-            LastFbxImportStatus = bImportSuccess ? "FBX import succeeded. Check log for parsed counts." : "FBX import failed. Check log for details.";
+            const bool bImportSuccess = Loader.ImportFbxFile(FbxImportPathBuffer, ImportedAsset);
+            if (bImportSuccess)
+            {
+                LastImportedFbxAsset = std::move(ImportedAsset);
+                bHasLastImportedFbxAsset = true;
+                LastFbxImportStatus = "FBX import succeeded. Check log for parsed counts.";
+            }
+            else
+            {
+                bHasLastImportedFbxAsset = false;
+                LastFbxImportStatus = "FBX import failed. Check log for details.";
+            }
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Import FBX Preview"))
+    {
+        if (FbxImportPathBuffer[0] == '\0')
+        {
+            LastFbxImportStatus = "FBX path is empty.";
+        }
+        else
+        {
+            UWorld* World = EditorEngine->GetFocusedWorld();
+            if (World == nullptr)
+            {
+                LastFbxImportStatus = "No focused world.";
+            }
+            else
+            {
+                FSkeletalMeshAsset ImportedAsset;
+                FFbxLoader Loader;
+                const bool bImportSuccess = Loader.ImportFbxFile(FbxImportPathBuffer, ImportedAsset);
+                if (!bImportSuccess)
+                {
+                    bHasLastImportedFbxAsset = false;
+                    LastFbxImportStatus = "FBX import failed. Check log for details.";
+                }
+                else
+                {
+                    LastImportedFbxAsset = ImportedAsset;
+                    bHasLastImportedFbxAsset = true;
+
+                    FSkeletalMeshAsset* PreviewMeshData = new FSkeletalMeshAsset(std::move(ImportedAsset));
+                    USkeletalMesh* PreviewMesh = UObjectManager::Get().CreateObject<USkeletalMesh>();
+                    PreviewMesh->SetMeshData(PreviewMeshData);
+
+                    ASkeletalMeshActor* PreviewActor = World->SpawnActor<ASkeletalMeshActor>();
+                    PreviewActor->SetActorLocation(CurSpawnPoint);
+
+                    USkeletalMeshComponent* SkeletalMeshComponent = FindSkeletalMeshComponent(PreviewActor);
+                    if (SkeletalMeshComponent == nullptr)
+                    {
+                        LastFbxImportStatus = "Preview actor has no skeletal mesh component.";
+                    }
+                    else
+                    {
+                        SkeletalMeshComponent->SetSkeletalMesh(PreviewMesh);
+
+                        const int32 MaterialSlotCount = static_cast<int32>(PreviewMesh->GetMaterialSlots().size());
+                        UMaterialInterface* DefaultMaterial = FResourceManager::Get().GetMaterial("DefaultWhite");
+                        for (int32 SlotIndex = 0; SlotIndex < MaterialSlotCount; ++SlotIndex)
+                        {
+                            SkeletalMeshComponent->SetMaterial(SlotIndex, DefaultMaterial);
+                        }
+
+                        World->RebuildSpatialIndex();
+                        LastFbxImportStatus = "FBX preview spawned as a skeletal mesh actor.";
+                    }
+                }
+            }
         }
     }
 
     if (!LastFbxImportStatus.empty())
     {
         ImGui::TextWrapped("%s", LastFbxImportStatus.c_str());
+    }
+
+    if (bHasLastImportedFbxAsset)
+    {
+        RenderSkeletonTree(LastImportedFbxAsset);
     }
 
     SEPARATOR();

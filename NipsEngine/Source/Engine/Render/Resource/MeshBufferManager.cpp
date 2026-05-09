@@ -1,5 +1,6 @@
 ﻿#include "MeshBufferManager.h"
 
+#include "Asset/SkeletalMesh.h"
 #include "Asset/StaticMesh.h"
 
 void FMeshBufferManager::Create(ID3D11Device* InDevice)
@@ -46,6 +47,12 @@ void FMeshBufferManager::Release()
         }
         StaticMeshBufferMap[i].clear();
     }
+
+    for (auto& pair : SkeletalMeshBufferMap)
+    {
+        pair.second.Release();
+    }
+    SkeletalMeshBufferMap.clear();
     
     Device = nullptr;
 }
@@ -105,4 +112,38 @@ FMeshBuffer* FMeshBufferManager::GetStaticMeshBuffer(const UStaticMesh* StaticMe
     NewBuffer.Create(Device, Vertices, Indices);
 
     return &NewBuffer;
+}
+
+FMeshBuffer* FMeshBufferManager::GetSkeletalMeshBuffer(const USkeletalMesh* SkeletalMeshAsset, const TArray<FNormalVertex>& SkinnedVertices)
+{
+    if (!Device || !SkeletalMeshAsset || !SkeletalMeshAsset->HasValidMeshData())
+    {
+        return nullptr;
+    }
+
+    const TArray<uint32>& Indices = SkeletalMeshAsset->GetIndices();
+    if (SkinnedVertices.empty() || Indices.empty())
+    {
+        return nullptr;
+    }
+
+    FMeshBuffer& Buffer = SkeletalMeshBufferMap[SkeletalMeshAsset];
+    if (!Buffer.IsValid() || Buffer.GetVertexBuffer().GetVertexCount() != static_cast<uint32>(SkinnedVertices.size()))
+    {
+        Buffer.Release();
+        Buffer.CreateDynamicVertices(Device, SkinnedVertices, Indices);
+        return Buffer.IsValid() ? &Buffer : nullptr;
+    }
+
+    ID3D11DeviceContext* ImmediateContext = nullptr;
+    Device->GetImmediateContext(&ImmediateContext);
+    if (ImmediateContext == nullptr)
+    {
+        return nullptr;
+    }
+
+    const bool bUpdated = Buffer.UpdateDynamicVertices(ImmediateContext, SkinnedVertices);
+    ImmediateContext->Release();
+
+    return bUpdated ? &Buffer : nullptr;
 }

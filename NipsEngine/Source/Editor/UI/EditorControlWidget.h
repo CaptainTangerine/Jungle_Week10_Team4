@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Editor/UI/EditorWidget.h"
+#include "Engine/Asset/SkeletalMeshTypes.h"
 #include "Math/Vector.h"
 
 class FEditorControlWidget : public FEditorWidget
@@ -18,4 +19,6 @@ private:
     FVector CurSpawnPoint = { 0.f, 0.f, 0.f };
     char FbxImportPathBuffer[260] = {};
     FString LastFbxImportStatus;
+    FSkeletalMeshAsset LastImportedFbxAsset;
+    bool bHasLastImportedFbxAsset = false;
 };

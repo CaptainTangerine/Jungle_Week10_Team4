@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-struct FbxVertex;
+#include "Render/Resource/VertexTypes.h"
 
 struct FBone
 {
@@ -10,11 +10,11 @@ struct FBone
     int ParentIndex;
 
     // Bind pose 시점의 Bone Local -> Parent Bone Local 변환.
-    FMatrix BoneLocalToParentLocalAtBindPose; //Bone행렬
+    FMatrix BoneToParentBind; //Bone행렬
     // Bind pose 시점의 Bone Local -> Global 변환.
-    FMatrix BoneLocalToGlobalAtBindPose;
+    FMatrix BoneToGlobalBind;
     // Bind pose 시점의 Mesh Local -> Bone Local 변환.
-    FMatrix MeshLocalToBoneLocalAtBindPose;
+    FMatrix MeshToBoneBind;
 };
 
 struct FSKeletalMeshSection
