@@ -114,7 +114,7 @@ void FFBXSDKContext::ConvertSceneToUnreal(FbxScene* Scene)
         UnrealAxisSystem.DeepConvertScene(Scene);
     }
 
-    const FbxSystemUnit CentimeterUnit(1.0);
+    const FbxSystemUnit CentimeterUnit(100.0);
     const FbxSystemUnit SourceUnit = Scene->GetGlobalSettings().GetSystemUnit();
     if (SourceUnit != CentimeterUnit)
     {
