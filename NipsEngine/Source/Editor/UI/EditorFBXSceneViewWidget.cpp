@@ -370,40 +370,8 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
     USceneComponent* RootComponent = Actor->AddComponent<USceneComponent>();
     Actor->SetRootComponent(RootComponent);
 
-    // Static Mesh 처리
-    for (const FFBXStaticMeshImportData& MeshData : ImportScene.StaticMeshes)
-    {
-        // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
-        if (MeshData.Vertices.empty() || MeshData.Indices.empty())
-        {
-            continue;
-        }
-
-        FStaticMesh* RawMesh = Importer.CreateStaticMeshFromImportData(MeshData);
-        if (RawMesh == nullptr)
-        {
-            continue;
-        }
-
-        // UStaticMesh 에셋 오브젝트 생성 후 가공된 메시 데이터를 등록
-        UStaticMesh* StaticMeshAsset = UObjectManager::Get().CreateObject<UStaticMesh>();
-        StaticMeshAsset->SetMeshData(RawMesh);
-
-        UStaticMeshComponent* MeshComponent = Actor->AddComponent<UStaticMeshComponent>();
-        MeshComponent->AttachToComponent(RootComponent);
-        MeshComponent->SetStaticMesh(StaticMeshAsset);
-
-        // 정점은 노드 로컬 공간(GeometricTransform만 적용)이므로
-        // GlobalTransformMatrix를 컴포넌트 월드 트랜스폼에 반영해야 씬 원점 기준 올바른 위치에 배치된다.
-        if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
-        {
-            ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
-        }
-
-        ++StaticSpawnedCount;
-    }
-
     // Skeletal Mesh 처리
+    // Static mesh가 이후 bone attachment 대상을 찾을 수 있도록 skinned component를 먼저 생성한다.
     for (const FFBXSkeletalMeshImportData& MeshData : ImportScene.SkeletalMeshes)
     {
         // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
@@ -437,6 +405,39 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         }
 
         ++SkeletalSpawnedCount;
+    }
+
+    // Static Mesh 처리
+    for (const FFBXStaticMeshImportData& MeshData : ImportScene.StaticMeshes)
+    {
+        // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
+        if (MeshData.Vertices.empty() || MeshData.Indices.empty())
+        {
+            continue;
+        }
+
+        FStaticMesh* RawMesh = Importer.CreateStaticMeshFromImportData(MeshData);
+        if (RawMesh == nullptr)
+        {
+            continue;
+        }
+
+        // UStaticMesh 에셋 오브젝트 생성 후 가공된 메시 데이터를 등록
+        UStaticMesh* StaticMeshAsset = UObjectManager::Get().CreateObject<UStaticMesh>();
+        StaticMeshAsset->SetMeshData(RawMesh);
+
+        UStaticMeshComponent* MeshComponent = Actor->AddComponent<UStaticMeshComponent>();
+        MeshComponent->AttachToComponent(RootComponent);
+        MeshComponent->SetStaticMesh(StaticMeshAsset);
+
+        // 정점은 노드 로컬 공간(GeometricTransform만 적용)이므로
+        // GlobalTransformMatrix를 컴포넌트 월드 트랜스폼에 반영해야 씬 원점 기준 올바른 위치에 배치된다.
+        if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
+        {
+            ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
+        }
+
+        ++StaticSpawnedCount;
     }
 
     // 공간 쿼리 인덱스 갱신 (새 컴포넌트의 AABB가 반영되어야 컬링/쿼리가 정상 동작)
