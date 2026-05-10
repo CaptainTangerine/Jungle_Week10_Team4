@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cfloat>
 
+#include "Component/SkinnedMeshComponent.h"
 #include "Core/ResourceManager.h"
 
 DEFINE_CLASS(UStaticMeshComponent, UMeshComponent)
@@ -21,6 +22,7 @@ void UStaticMeshComponent::PostDuplicate(UObject* Original)
     const UStaticMeshComponent* Orig = Cast<UStaticMeshComponent>(Original);
     StaticMeshAsset = Orig->StaticMeshAsset;
     bNormalizeOnImport = Orig->bNormalizeOnImport;
+    ClearBoneAttachment();
     bBoundsDirty = true;
     bRenderStateDirty = true;
 
@@ -52,6 +54,11 @@ void UStaticMeshComponent::Serialize(FArchive& Ar)
 {
     UMeshComponent::Serialize(Ar);
     SerializeStaticMeshAsset(Ar);
+
+    if (Ar.IsLoading())
+    {
+        ClearBoneAttachment();
+    }
 }
 
 void UStaticMeshComponent::SetStaticMesh(UStaticMesh* InStaticMesh)
@@ -246,6 +253,45 @@ bool UStaticMeshComponent::ConsumeRenderStateDirty()
     const bool bWasDirty = bRenderStateDirty;
     bRenderStateDirty = false;
     return bWasDirty;
+}
+
+void UStaticMeshComponent::AttachToBone(
+    USkinnedMeshComponent* InSkinnedMeshComponent,
+    int32 InBoneIndex,
+    const FMatrix& InAttachLocalOffset)
+{
+    AttachedSkinnedMeshComponent = InSkinnedMeshComponent;
+    AttachedBoneIndex = InBoneIndex;
+    AttachLocalOffset = InAttachLocalOffset;
+    UpdateBoneAttachment();
+}
+
+void UStaticMeshComponent::ClearBoneAttachment()
+{
+    AttachedSkinnedMeshComponent = nullptr;
+    AttachedBoneIndex = -1;
+    AttachLocalOffset = FMatrix::Identity;
+}
+
+void UStaticMeshComponent::UpdateBoneAttachment()
+{
+    if (AttachedSkinnedMeshComponent == nullptr || AttachedBoneIndex < 0)
+    {
+        return;
+    }
+
+    FMatrix BoneGlobalMeshTransform = FMatrix::Identity;
+    if (!AttachedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(AttachedBoneIndex, BoneGlobalMeshTransform))
+    {
+        return;
+    }
+
+    SetRelativeMatrix(
+        AttachLocalOffset *
+        BoneGlobalMeshTransform *
+        AttachedSkinnedMeshComponent->GetRelativeMatrix());
+    MarkBoundsDirty();
+    MarkRenderStateDirty();
 }
 
 void UStaticMeshComponent::SerializeStaticMeshAsset(FArchive& Ar)

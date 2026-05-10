@@ -68,6 +68,61 @@ namespace
         return Stem.empty() ? "FBX_ImportedScene" : FString("FBX_") + Stem;
     }
 
+    bool TryAttachStaticMeshToBone(
+        UStaticMeshComponent* StaticMeshComponent,
+        int32 StaticSourceNodeIndex,
+        const FFBXImportScene& ImportScene,
+        const TArray<USkinnedMeshComponent*>& SkinnedMeshComponents)
+    {
+        if (StaticMeshComponent == nullptr ||
+            StaticSourceNodeIndex < 0 ||
+            StaticSourceNodeIndex >= static_cast<int32>(ImportScene.Nodes.size()))
+        {
+            return false;
+        }
+
+        const FFBXImportNode& StaticNode = ImportScene.Nodes[StaticSourceNodeIndex];
+        int32 AncestorNodeIndex = StaticNode.ParentIndex;
+
+        while (AncestorNodeIndex >= 0 && AncestorNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
+        {
+            const FFBXImportNode& AncestorNode = ImportScene.Nodes[AncestorNodeIndex];
+            for (USkinnedMeshComponent* SkinnedMeshComponent : SkinnedMeshComponents)
+            {
+                if (SkinnedMeshComponent == nullptr)
+                {
+                    continue;
+                }
+
+                const int32 BoneIndex = SkinnedMeshComponent->FindBoneIndexByName(AncestorNode.Name);
+                if (BoneIndex < 0)
+                {
+                    continue;
+                }
+
+                FMatrix BoneBindGlobalMeshTransform = FMatrix::Identity;
+                if (!SkinnedMeshComponent->GetBindBoneGlobalMeshTransform(BoneIndex, BoneBindGlobalMeshTransform))
+                {
+                    continue;
+                }
+
+                const FMatrix BoneBindActorTransform =
+                    BoneBindGlobalMeshTransform *
+                    SkinnedMeshComponent->GetRelativeMatrix();
+                const FMatrix AttachLocalOffset =
+                    StaticNode.GlobalTransformMatrix *
+                    BoneBindActorTransform.GetInverse();
+
+                StaticMeshComponent->AttachToBone(SkinnedMeshComponent, BoneIndex, AttachLocalOffset);
+                return true;
+            }
+
+            AncestorNodeIndex = AncestorNode.ParentIndex;
+        }
+
+        return false;
+    }
+
     FWString GetFBXDialogInitialDir()
     {
         std::filesystem::path MeshDir(FPaths::RootDir());
@@ -370,6 +425,8 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
     USceneComponent* RootComponent = Actor->AddComponent<USceneComponent>();
     Actor->SetRootComponent(RootComponent);
 
+    TArray<USkinnedMeshComponent*> SpawnedSkinnedMeshComponents;
+
     // Skeletal Mesh 처리
     // Static mesh가 이후 bone attachment 대상을 찾을 수 있도록 skinned component를 먼저 생성한다.
     for (const FFBXSkeletalMeshImportData& MeshData : ImportScene.SkeletalMeshes)
@@ -405,6 +462,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         }
 
         ++SkeletalSpawnedCount;
+        SpawnedSkinnedMeshComponents.push_back(MeshComponent);
     }
 
     // Static Mesh 처리
@@ -435,6 +493,11 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         if (MeshData.SourceNodeIndex >= 0 && MeshData.SourceNodeIndex < static_cast<int32>(ImportScene.Nodes.size()))
         {
             ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
+            TryAttachStaticMeshToBone(
+                MeshComponent,
+                MeshData.SourceNodeIndex,
+                ImportScene,
+                SpawnedSkinnedMeshComponents);
         }
 
         ++StaticSpawnedCount;

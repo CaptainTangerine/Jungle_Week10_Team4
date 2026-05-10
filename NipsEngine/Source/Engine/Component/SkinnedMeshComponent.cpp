@@ -508,6 +508,53 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     MarkRenderStateDirty();
 }
 
+int32 USkinnedMeshComponent::FindBoneIndexByName(const FString& BoneName) const
+{
+    if (SkeletalMeshAsset == nullptr || BoneName.empty())
+    {
+        return -1;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Bones.size()); ++BoneIndex)
+    {
+        if (Bones[BoneIndex].Name == BoneName)
+        {
+            return BoneIndex;
+        }
+    }
+
+    return -1;
+}
+
+bool USkinnedMeshComponent::GetCurrentBoneGlobalMeshTransform(int32 BoneIndex, FMatrix& OutTransform) const
+{
+    if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(CurrentBoneGlobalMeshTransforms.size()))
+    {
+        return GetBindBoneGlobalMeshTransform(BoneIndex, OutTransform);
+    }
+
+    OutTransform = CurrentBoneGlobalMeshTransforms[BoneIndex];
+    return true;
+}
+
+bool USkinnedMeshComponent::GetBindBoneGlobalMeshTransform(int32 BoneIndex, FMatrix& OutTransform) const
+{
+    if (SkeletalMeshAsset == nullptr)
+    {
+        return false;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(Bones.size()))
+    {
+        return false;
+    }
+
+    OutTransform = Bones[BoneIndex].GlobalTransform;
+    return true;
+}
+
 void USkinnedMeshComponent::RebuildCurrentBoneGlobalTransforms(const TArray<FBoneInfo>& Bones)
 {
     const int32 BoneCount = static_cast<int32>(Bones.size());

@@ -3,6 +3,8 @@
 #include "Asset/StaticMesh.h"
 #include "Render/Resource/Material.h"
 
+class USkinnedMeshComponent;
+
 class UStaticMeshComponent : public UMeshComponent
 {
 public:
@@ -27,6 +29,10 @@ public:
     const FAABB& GetWorldAABB() const override;
 
     bool ConsumeRenderStateDirty();
+    void AttachToBone(USkinnedMeshComponent* InSkinnedMeshComponent, int32 InBoneIndex, const FMatrix& InAttachLocalOffset);
+    void ClearBoneAttachment();
+    void UpdateBoneAttachment();
+    bool HasBoneAttachment() const { return AttachedSkinnedMeshComponent != nullptr && AttachedBoneIndex >= 0; }
 
 private:
     void SerializeStaticMeshAsset(FArchive& Ar);
@@ -42,6 +48,10 @@ private:
     UStaticMesh* StaticMeshAsset = nullptr;
     FString StaticMeshAssetPath;
     bool bNormalizeOnImport = false;
+
+    USkinnedMeshComponent* AttachedSkinnedMeshComponent = nullptr;
+    int32 AttachedBoneIndex = -1;
+    FMatrix AttachLocalOffset = FMatrix::Identity;
 
     mutable bool bBoundsDirty = true;
     bool bRenderStateDirty = true;

@@ -13,6 +13,7 @@
 #include "Component/PrimitiveComponent.h"
 #include "Component/ShapeComponent.h"
 #include "Component/SkinnedMeshComponent.h"
+#include "Component/StaticMeshComponent.h"
 #include "Component/TextRenderComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/Light/DirectionalLightComponent.h"
@@ -306,6 +307,26 @@ void FRenderCollector::PrepareSkinnedMeshResources(UWorld* World)
             SkinnedMeshComp->UpdateCPUSkinning();
             SkinnedMeshComp->EnsureSkinnedMeshBuffer(Device);
             SkinnedMeshComp->UploadSkinnedVertices(Context);
+        }
+    }
+
+    for (TActorIterator<AActor> Iter(World); Iter; ++Iter)
+    {
+        AActor* Actor = *Iter;
+        if (Actor == nullptr || !Actor->IsVisible())
+        {
+            continue;
+        }
+
+        for (UPrimitiveComponent* Primitive : Actor->GetPrimitiveComponents())
+        {
+            UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(Primitive);
+            if (StaticMeshComp == nullptr || !StaticMeshComp->HasBoneAttachment())
+            {
+                continue;
+            }
+
+            StaticMeshComp->UpdateBoneAttachment();
         }
     }
 }

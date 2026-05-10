@@ -47,6 +47,9 @@ public:
     bool InitializeSkinnedVerticesFromBindPose();
     bool UploadSkinnedVertices(ID3D11DeviceContext* Context);
     void UpdateCPUSkinning();
+    int32 FindBoneIndexByName(const FString& BoneName) const;
+    bool GetCurrentBoneGlobalMeshTransform(int32 BoneIndex, FMatrix& OutTransform) const;
+    bool GetBindBoneGlobalMeshTransform(int32 BoneIndex, FMatrix& OutTransform) const;
 
     void ReleaseDynamicSkinResources();
 
