@@ -203,7 +203,7 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
     }
     if (ImGui::Button("Spawn Actors"))
     {
-        SpawnImportedStaticMeshActors();
+        SpawnImportedFBXMeshActors();
     }
     if (!bHasMeshes)
     {

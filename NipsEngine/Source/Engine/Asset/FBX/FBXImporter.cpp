@@ -523,7 +523,10 @@ void FFBXImporter::BuildBoneTable(FbxMesh* Mesh, OUT FFBXSkeletalMeshImportData&
             continue;
         }
 
-        RegisterBone(Cluster->GetLink(), Cluster, OutMeshDatas);
+        FbxAMatrix MeshBindMatrix;
+        Cluster->GetTransformMatrix(MeshBindMatrix);
+
+        RegisterBone(Cluster->GetLink(), Cluster, ConvertFbxMatrix(MeshBindMatrix), OutMeshDatas);
     }
 }
 
@@ -550,7 +553,21 @@ int32 FFBXImporter::FindRegisteredBoneParentIndex(FbxNode* Node) const
     return -1;
 }
 
-int32 FFBXImporter::RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, OUT FFBXSkeletalMeshImportData& OutMeshDatas)
+FMatrix FFBXImporter::CalculateBoneLocalBindTransform(
+    FbxNode* BoneNode,
+    const FMatrix& BoneBindMesh,
+    const FFBXSkeletalMeshImportData& MeshData) const
+{
+    const int32 ParentBoneIndex = FindRegisteredBoneParentIndex(BoneNode);
+    if (ParentBoneIndex >= 0 && ParentBoneIndex < static_cast<int32>(MeshData.Bones.size()))
+    {
+        return BoneBindMesh * MeshData.Bones[ParentBoneIndex].GlobalTransform.GetInverse();
+    }
+
+    return BoneBindMesh;
+}
+
+int32 FFBXImporter::RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, const FMatrix& MeshBindGlobal, OUT FFBXSkeletalMeshImportData& OutMeshDatas)
 {
     if (!BoneNode)
     {
@@ -560,8 +577,20 @@ int32 FFBXImporter::RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, OUT FFB
     FbxNode* ParentNode = BoneNode->GetParent();
     if (IsSkeletonNode(ParentNode))
     {
-        RegisterBone(ParentNode, nullptr, OutMeshDatas);
+        RegisterBone(ParentNode, nullptr, MeshBindGlobal, OutMeshDatas);
     }
+
+    // 클러스터가 있는 경우엔 해당 노드 바인드 포즈 기준의 Global인 LinkBindMatrix를 써야함
+    FMatrix BoneBindGlobal = ConvertFbxMatrix(BoneNode->EvaluateGlobalTransform());
+    if (Cluster)
+    {
+        FbxAMatrix LinkBindMatrix;
+        Cluster->GetTransformLinkMatrix(LinkBindMatrix);
+        BoneBindGlobal = ConvertFbxMatrix(LinkBindMatrix);
+    }
+
+    // Mesh local 기준에서의 LocalTrnasform과 GlobalTrnasform을 만들어서 저장
+    const FMatrix BoneBindMesh = BoneBindGlobal * MeshBindGlobal.GetInverse();
 
     const uint64 BoneNodeKey = BoneNode->GetUniqueID();
     auto Iter = BoneIdToIndex.find(BoneNodeKey);
@@ -569,19 +598,12 @@ int32 FFBXImporter::RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, OUT FFB
     {
         const int32 BoneIndex = Iter->second;
 
-        if (Cluster && BoneIndex >= 0 && BoneIndex < static_cast<int32>(OutMeshDatas.Bones.size()))
+        if (BoneIndex >= 0 && BoneIndex < static_cast<int32>(OutMeshDatas.Bones.size()))
         {
-
-            // 어떠한 FBX파일은 Bone과 Mesh의 좌표계가 다른경우가 있습니다.
-            // MeshTransform까지 고려해서 혹시모를 실수를 방지
-            FbxAMatrix LinkBindMatrix;
-            FbxAMatrix MeshTransform;
-
-            Cluster->GetTransformMatrix(MeshTransform);
-            Cluster->GetTransformLinkMatrix(LinkBindMatrix);
-            FbxAMatrix InverseBindMatrix = LinkBindMatrix.Inverse() * MeshTransform;
-
-            OutMeshDatas.Bones[BoneIndex].InverseBindTransform = ConvertFbxMatrix(InverseBindMatrix);
+            FBoneInfo& BoneInfo = OutMeshDatas.Bones[BoneIndex];
+            BoneInfo.GlobalTransform = BoneBindMesh;
+            BoneInfo.LocalTransform = CalculateBoneLocalBindTransform(BoneNode, BoneBindMesh, OutMeshDatas);
+            BoneInfo.InverseBindTransform = BoneBindMesh.GetInverse();
         }
 
         return BoneIndex;
@@ -589,19 +611,9 @@ int32 FFBXImporter::RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, OUT FFB
 
     FBoneInfo BoneInfo = {};
     BoneInfo.Name = BoneNode->GetName();
-    BoneInfo.LocalTransform = ConvertFbxMatrix(BoneNode->EvaluateLocalTransform());
-    BoneInfo.GlobalTransform = ConvertFbxMatrix(BoneNode->EvaluateGlobalTransform());
-
-    if (Cluster)
-    {
-        FbxAMatrix LinkBindMatrix;
-        Cluster->GetTransformLinkMatrix(LinkBindMatrix);
-        BoneInfo.InverseBindTransform = ConvertFbxMatrix(LinkBindMatrix).GetInverse();
-    }
-    else
-    {
-        BoneInfo.InverseBindTransform = BoneInfo.GlobalTransform.GetInverse();
-    }
+    BoneInfo.LocalTransform = CalculateBoneLocalBindTransform(BoneNode, BoneBindMesh, OutMeshDatas);
+    BoneInfo.GlobalTransform = BoneBindMesh;
+    BoneInfo.InverseBindTransform = BoneBindMesh.GetInverse();
 
     const int32 BoneIndex = static_cast<int32>(OutMeshDatas.Bones.size());
     BoneIdToIndex[BoneNodeKey] = BoneIndex;
@@ -651,6 +663,19 @@ void FFBXImporter::BuildBoneHierarchy(FbxMesh* Mesh, OUT FFBXSkeletalMeshImportD
             }
 
             BoneNode = BoneNode->GetParent();
+        }
+    }
+
+    for (FBoneInfo& BoneInfo : OutMeshDatas.Bones)
+    {
+        if (BoneInfo.ParentIndex >= 0 && BoneInfo.ParentIndex < static_cast<int32>(OutMeshDatas.Bones.size()))
+        {
+            BoneInfo.LocalTransform =
+                BoneInfo.GlobalTransform * OutMeshDatas.Bones[BoneInfo.ParentIndex].GlobalTransform.GetInverse();
+        }
+        else
+        {
+            BoneInfo.LocalTransform = BoneInfo.GlobalTransform;
         }
     }
 }

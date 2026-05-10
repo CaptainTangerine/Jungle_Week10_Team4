@@ -112,7 +112,8 @@ private:
     void BuildBoneTable(FbxMesh* Mesh , OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     bool IsSkeletonNode(FbxNode* Node) const;
     int32 FindRegisteredBoneParentIndex(FbxNode* Node) const;
-    int32 RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
+    FMatrix CalculateBoneLocalBindTransform(FbxNode* BoneNode, const FMatrix& BoneBindMesh, const FFBXSkeletalMeshImportData& MeshData) const;
+    int32 RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, const FMatrix& MeshBindGlobal, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     void BuildBoneWeight(FbxMesh* Mesh, const TArray<int32>& VertexControlPointsIndices, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     void BuildBoneHierarchy(FbxMesh* Mesh, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
 
