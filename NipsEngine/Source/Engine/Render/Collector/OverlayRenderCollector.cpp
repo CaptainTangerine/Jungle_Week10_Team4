@@ -3,10 +3,12 @@
 #include "Component/BillboardComponent.h"
 #include "Component/GizmoComponent.h"
 #include "Component/PrimitiveComponent.h"
+#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
 #include "Core/ResourceManager.h"
+#include "Engine/Asset/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
 #include "Render/LineBatcher.h"
@@ -228,12 +230,29 @@ bool FOverlayRenderCollector::CollectFromSelectedActor(
             auto* StaticMeshComp = static_cast<UStaticMeshComponent*>(primitiveComponent);
             MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMeshComp->GetStaticMesh());
         }
+        else if (primitiveComponent->GetPrimitiveType() == EPrimitiveType::EPT_SkinnedMesh)
+        {
+            auto* SkinnedMeshComp = static_cast<USkinnedMeshComponent*>(primitiveComponent);
+            const USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
+            if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData())
+            {
+                continue;
+            }
+
+            if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose() ||
+                !SkinnedMeshComp->EnsureSkinnedMeshBuffer(MeshBufferManager->GetDevice()))
+            {
+                continue;
+            }
+
+            MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
+        }
         else
         {
             MeshBuffer = &MeshBufferManager->GetMeshBuffer(primitiveComponent->GetPrimitiveType());
         }
 
-        if (!MeshBuffer)
+        if (!MeshBuffer || !MeshBuffer->IsValid())
         {
             continue;
         }
