@@ -429,20 +429,23 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
     // 하드코딩으로 neck 본 LocalTrnasform 변경
     const double TimeSeconds = FPlatformTime::Seconds();
-    float DebugOffset = static_cast<float>(std::sin(TimeSeconds * 0.75) * 2.0);
-    DebugOffset = std::max(0.f, DebugOffset);
+    constexpr float DegToRad = 3.14159265358979323846f / 180.0f;
+    const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 5) * DegToRad;
 
     for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
     {
         const FString& BoneName = Bones[BoneIdx].Name;
-        const bool bIsHeadBone = BoneName.find("neck") != FString::npos;
+        const bool bIsNeckBone =
+            BoneName.find("Neck") != FString::npos ||
+            BoneName.find("neck") != FString::npos ||
+            BoneName.find("NECK") != FString::npos;
 
-        if (!bIsHeadBone)
+        if (!bIsNeckBone)
         {
             continue;
         }
 
-        const FMatrix OffsetTransform = FMatrix::MakeTranslation(FVector(0.f, DebugOffset, 0.f));
+        const FMatrix OffsetTransform = FMatrix::MakeRotationZ(DebugYawRadians);
         CurrentBoneLocalTransforms[BoneIdx] = CurrentBoneLocalTransforms[BoneIdx] * OffsetTransform;
         break;
     }
