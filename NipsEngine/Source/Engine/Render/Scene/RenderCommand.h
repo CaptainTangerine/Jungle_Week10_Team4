@@ -34,6 +34,7 @@ enum class ERenderCommandType
     Font,		// TextRenderComponent — FontBatcher 경유
     SubUV,		// SubUVComponent     — SubUVBatcher 경유
     StaticMesh,	// UStaticMeshComponent — OBJ 메시 퐁셰이딩
+    SkinnedMesh, // USkinnedMeshComponent — prepared skinned vertex buffer
     Decal,
     Light,
     Sky,

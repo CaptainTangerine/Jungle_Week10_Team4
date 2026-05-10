@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Editor/UI/EditorWidget.h"
 #include "Asset/FBX/FBXImporter.h"
@@ -17,7 +17,7 @@ private:
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);
     void RenderDetails() const;
-    void SpawnImportedStaticMeshActors();
+    void SpawnImportedFBXMeshActors();
 
 private:
     FFBXImportScene ImportScene;

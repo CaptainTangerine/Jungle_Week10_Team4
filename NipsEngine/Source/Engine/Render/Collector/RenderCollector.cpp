@@ -12,6 +12,7 @@
 #include "Component/BillboardComponent.h"
 #include "Component/PrimitiveComponent.h"
 #include "Component/ShapeComponent.h"
+#include "Component/SkinnedMeshComponent.h"
 #include "Component/TextRenderComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/Light/DirectionalLightComponent.h"
@@ -140,6 +141,8 @@ void FRenderCollector::CollectWorld(UWorld* World, const FShowFlags& ShowFlags, 
     if (!World)
         return;
 
+    PrepareSkinnedMeshResources(World);
+
     CollectLight(World, ShowFlags, RenderBus, ViewFrustum);
     if (ShowFlags.bShadow)
     {
@@ -261,6 +264,45 @@ void FRenderCollector::CollectLight(UWorld* World, const FShowFlags& ShowFlags, 
 void FRenderCollector::CollectShadowCasters(UWorld* World, FRenderBus& RenderBus)
 {
     LightRenderCollector.CollectShadowCasters(World, RenderBus);
+}
+
+void FRenderCollector::PrepareSkinnedMeshResources(UWorld* World)
+{
+    if (World == nullptr)
+    {
+        return;
+    }
+
+    ID3D11Device* Device = MeshBufferManager.GetDevice();
+    if (Device == nullptr)
+    {
+        return;
+    }
+
+    for (TActorIterator<AActor> Iter(World); Iter; ++Iter)
+    {
+        AActor* Actor = *Iter;
+        if (Actor == nullptr || !Actor->IsVisible())
+        {
+            continue;
+        }
+
+        for (UPrimitiveComponent* Primitive : Actor->GetPrimitiveComponents())
+        {
+            USkinnedMeshComponent* SkinnedMeshComp = Cast<USkinnedMeshComponent>(Primitive);
+            if (SkinnedMeshComp == nullptr || !SkinnedMeshComp->IsVisible() || !SkinnedMeshComp->HasValidMesh())
+            {
+                continue;
+            }
+
+            if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose())
+            {
+                continue;
+            }
+
+            SkinnedMeshComp->EnsureSkinnedMeshBuffer(Device);
+        }
+    }
 }
 
 void FRenderCollector::CollectSelection(const TArray<AActor*>& SelectedActors, const FShowFlags& ShowFlags, EViewMode ViewMode, FRenderBus& RenderBus)

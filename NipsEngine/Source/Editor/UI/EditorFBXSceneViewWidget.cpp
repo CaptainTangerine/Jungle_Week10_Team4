@@ -342,7 +342,7 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
     }
 }
 
-void FEditorFBXSceneViewWidget::SpawnImportedStaticMeshActors()
+void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 {
     // StaticMesh와 SkeletalMesh 데이터가 모두 없으면 생성할 것이 없으므로 조기 반환
     if (ImportScene.StaticMeshes.empty() && ImportScene.SkeletalMeshes.empty())

@@ -11,6 +11,7 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
     if (SourceSkeletalMesh != SkeletalMesh)
     {
         MeshBuffer.Release();
+        bBindPoseDataDirty = true;
     }
 
     SourceSkeletalMesh = SkeletalMesh;
@@ -20,6 +21,7 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
         SkinnedVertices.clear();
         IndexData.clear();
         MeshBuffer.Release();
+        bBindPoseDataDirty = true;
         return false;
     }
 
@@ -30,7 +32,15 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
         SkinnedVertices.clear();
         IndexData.clear();
         MeshBuffer.Release();
+        bBindPoseDataDirty = true;
         return false;
+    }
+
+    if (!bBindPoseDataDirty &&
+        SkinnedVertices.size() == SourceVertices.size() &&
+        IndexData.size() == SourceIndices.size())
+    {
+        return true;
     }
 
     SkinnedVertices.resize(SourceVertices.size());
@@ -49,6 +59,7 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
         Target.Bitangent = Source.Bitangent;
     }
 
+    bBindPoseDataDirty = false;
     return true;
 }
 
@@ -125,6 +136,7 @@ void FSkinnedMeshRenderResource::Release()
     SourceSkeletalMesh = nullptr;
     SkinnedVertices.clear();
     IndexData.clear();
+    bBindPoseDataDirty = true;
     MeshBuffer.Release();
 }
 

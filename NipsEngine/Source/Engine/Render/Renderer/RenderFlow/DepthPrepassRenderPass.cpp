@@ -9,7 +9,7 @@ namespace
 {
     bool IsDepthPrepassEligible(const FRenderCommand& Cmd)
     {
-        if (Cmd.Type != ERenderCommandType::StaticMesh)
+        if (Cmd.Type != ERenderCommandType::StaticMesh && Cmd.Type != ERenderCommandType::SkinnedMesh)
         {
             return false;
         }

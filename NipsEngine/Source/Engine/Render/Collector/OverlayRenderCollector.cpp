@@ -239,12 +239,6 @@ bool FOverlayRenderCollector::CollectFromSelectedActor(
                 continue;
             }
 
-            if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose() ||
-                !SkinnedMeshComp->EnsureSkinnedMeshBuffer(MeshBufferManager->GetDevice()))
-            {
-                continue;
-            }
-
             MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
         }
         else

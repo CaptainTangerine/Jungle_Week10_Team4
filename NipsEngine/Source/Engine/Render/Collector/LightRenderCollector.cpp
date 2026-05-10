@@ -992,9 +992,6 @@ void FLightRenderCollector::CollectShadowCasters(UWorld* World, FRenderBus& Rend
         const USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
         if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData()) return;
 
-        if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose()) return;
-        if (!SkinnedMeshComp->EnsureSkinnedMeshBuffer(MeshBufferManager->GetDevice())) return;
-
         FMeshBuffer* MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
         if (MeshBuffer == nullptr || !MeshBuffer->IsValid()) return;
 
@@ -1002,7 +999,7 @@ void FLightRenderCollector::CollectShadowCasters(UWorld* World, FRenderBus& Rend
         {
             FRenderCommand Cmd = {};
             Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
-            Cmd.Type = ERenderCommandType::StaticMesh;
+            Cmd.Type = ERenderCommandType::SkinnedMesh;
             Cmd.MeshBuffer = MeshBuffer;
             Cmd.SectionIndexStart = Section.StartIndex;
             Cmd.SectionIndexCount = Section.IndexCount;

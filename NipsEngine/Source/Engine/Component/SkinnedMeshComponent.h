@@ -9,6 +9,7 @@ struct FSkinnedMeshRenderResource
     TArray<uint32>        IndexData;
     FMeshBuffer           MeshBuffer;
     const USkeletalMesh* SourceSkeletalMesh = nullptr;
+    bool bBindPoseDataDirty = true;
 
     bool InitializeFromBindPose(const USkeletalMesh* SkeletalMesh);
     bool EnsureMeshBuffer(ID3D11Device* Device);
