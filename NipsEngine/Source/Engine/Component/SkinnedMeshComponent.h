@@ -7,16 +7,16 @@ struct FSkinnedMeshRenderResource
 {
     TArray<FNormalVertex> SkinnedVertices;
     TArray<uint32>        IndexData;
-    FVertexBuffer DynamicSkinnedVertexBuffer;
-    FIndexBuffer  StaticIB;
+    FMeshBuffer           MeshBuffer;
     const USkeletalMesh* SourceSkeletalMesh = nullptr;
 
-    bool EnsureDynamicVertexBuffer(ID3D11Device* Device, uint32 VertexCount);
-    bool EnsureStaticIndexBuffer(ID3D11Device* Device);
     bool InitializeFromBindPose(const USkeletalMesh* SkeletalMesh);
+    bool EnsureMeshBuffer(ID3D11Device* Device);
     bool Upload(ID3D11DeviceContext* Context);
     void Release();
     const USkeletalMesh* GetSourceSkeletalMesh() const { return SourceSkeletalMesh; }
+    FMeshBuffer& GetMeshBuffer() { return MeshBuffer; }
+    const FMeshBuffer& GetMeshBuffer() const { return MeshBuffer; }
 };
 
 class USkinnedMeshComponent : public UMeshComponent
@@ -42,15 +42,13 @@ public:
     const FAABB& GetWorldAABB() const override;
     bool ConsumeRenderStateDirty();
 
-    bool EnsureDynamicSkinnedVertexBuffer(ID3D11Device* Device);
+    bool EnsureSkinnedMeshBuffer(ID3D11Device* Device);
     bool InitializeSkinnedVerticesFromBindPose();
     bool UploadSkinnedVertices(ID3D11DeviceContext* Context);
     void ReleaseDynamicSkinResources();
 
     FSkinnedMeshRenderResource& GetSkinnedMeshRenderResource() { return SkinnedRenderResource; }
     const FSkinnedMeshRenderResource& GetSkinnedMeshRenderResource() const { return SkinnedRenderResource; }
-    FVertexBuffer& GetDynamicSkinnedVertexBuffer() { return SkinnedRenderResource.DynamicSkinnedVertexBuffer; }
-    const FVertexBuffer& GetDynamicSkinnedVertexBuffer() const { return SkinnedRenderResource.DynamicSkinnedVertexBuffer; }
     TArray<FNormalVertex>& GetSkinnedVertices() { return SkinnedRenderResource.SkinnedVertices; }
     const TArray<FNormalVertex>& GetSkinnedVertices() const { return SkinnedRenderResource.SkinnedVertices; }
 

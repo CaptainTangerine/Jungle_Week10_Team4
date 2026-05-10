@@ -4,7 +4,9 @@
 #include "Component/Light/PointLightComponent.h"
 #include "Component/Light/SpotLightComponent.h"
 #include "Component/PrimitiveComponent.h"
+#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
+#include "Engine/Asset/SkeletalMesh.h"
 #include "Engine/Asset/StaticMesh.h"
 #include "Engine/Geometry/Frustum.h"
 #include "GameFramework/Actor.h"
@@ -955,20 +957,48 @@ void FLightRenderCollector::CollectShadowCasters(UWorld* World, FRenderBus& Rend
     {
         if (Primitive == nullptr || !Primitive->IsVisible()) return;
         if (Primitive->IsEditorOnly() && WorldType != EWorldType::Editor) return;
-        if (Primitive->GetPrimitiveType() != EPrimitiveType::EPT_StaticMesh) return;
+        const EPrimitiveType PrimitiveType = Primitive->GetPrimitiveType();
+        if (PrimitiveType != EPrimitiveType::EPT_StaticMesh && PrimitiveType != EPrimitiveType::EPT_SkinnedMesh) return;
         if (!AddedPrimitives.insert(Primitive).second) return;
 
-        UStaticMeshComponent* StaticMeshComp = static_cast<UStaticMeshComponent*>(Primitive);
-        const UStaticMesh* StaticMesh = StaticMeshComp->GetStaticMesh();
-        if (StaticMesh == nullptr || !StaticMesh->HasValidMeshData()) return;
+        if (PrimitiveType == EPrimitiveType::EPT_StaticMesh)
+        {
+            UStaticMeshComponent* StaticMeshComp = static_cast<UStaticMeshComponent*>(Primitive);
+            const UStaticMesh* StaticMesh = StaticMeshComp->GetStaticMesh();
+            if (StaticMesh == nullptr || !StaticMesh->HasValidMeshData()) return;
 
-        FMeshBuffer* MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMesh, 0);
+            FMeshBuffer* MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMesh, 0);
+            if (MeshBuffer == nullptr || !MeshBuffer->IsValid()) return;
+
+            const FStaticMesh* MeshData = StaticMesh->GetMeshData(0);
+            if (MeshData == nullptr) return;
+
+            for (const FStaticMeshSection& Section : MeshData->Sections)
+            {
+                FRenderCommand Cmd = {};
+                Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
+                Cmd.Type = ERenderCommandType::StaticMesh;
+                Cmd.MeshBuffer = MeshBuffer;
+                Cmd.SectionIndexStart = Section.StartIndex;
+                Cmd.SectionIndexCount = Section.IndexCount;
+
+                RenderBus.AddCommand(ERenderPass::ShadowCasters, Cmd);
+            }
+
+            return;
+        }
+
+        USkinnedMeshComponent* SkinnedMeshComp = static_cast<USkinnedMeshComponent*>(Primitive);
+        const USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
+        if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData()) return;
+
+        if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose()) return;
+        if (!SkinnedMeshComp->EnsureSkinnedMeshBuffer(MeshBufferManager->GetDevice())) return;
+
+        FMeshBuffer* MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
         if (MeshBuffer == nullptr || !MeshBuffer->IsValid()) return;
 
-        const FStaticMesh* MeshData = StaticMesh->GetMeshData(0);
-        if (MeshData == nullptr) return;
-
-        for (const FStaticMeshSection& Section : MeshData->Sections)
+        for (const FSkeletalMeshSection& Section : SkeletalMesh->GetSections())
         {
             FRenderCommand Cmd = {};
             Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };

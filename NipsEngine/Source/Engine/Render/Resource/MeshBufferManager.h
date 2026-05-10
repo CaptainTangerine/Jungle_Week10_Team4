@@ -32,6 +32,7 @@ public:
     void Create(ID3D11Device* InDevice);
     void Release();
 
+    ID3D11Device* GetDevice() const { return Device; }
     FMeshBuffer& GetMeshBuffer(EPrimitiveType InPrimitiveType);
     FMeshBuffer* GetStaticMeshBuffer(const UStaticMesh* StaticMeshAsset, int32 LODLevel = 0);
 };

@@ -6,55 +6,20 @@
 
 DEFINE_CLASS(USkinnedMeshComponent, UMeshComponent)
 
-bool FSkinnedMeshRenderResource::EnsureDynamicVertexBuffer(ID3D11Device* Device, uint32 VertexCount)
-{
-    // Device가 없거나 버텍스 수가 0이면 생성할 수 없다.
-    // 기존 버퍼가 있다면 그대로 보존한다 — 여기서 Release하면
-    // 유효한 버퍼가 파괴되고 다음 호출에서 재생성 루프가 발생한다.
-    if (Device == nullptr || VertexCount == 0)
-    {
-        return false;
-    }
-
-    const bool bNeedsCreate =
-        DynamicSkinnedVertexBuffer.GetBuffer() == nullptr ||
-        DynamicSkinnedVertexBuffer.GetVertexCount() != VertexCount ||
-        DynamicSkinnedVertexBuffer.GetStride() != sizeof(FNormalVertex);
-
-    if (bNeedsCreate)
-    {
-        DynamicSkinnedVertexBuffer.CreateDynamic<FNormalVertex>(Device, VertexCount);
-    }
-
-    return DynamicSkinnedVertexBuffer.GetBuffer() != nullptr;
-}
-
-bool FSkinnedMeshRenderResource::EnsureStaticIndexBuffer(ID3D11Device* Device)
-{
-    // DynamicVertexBuffer와 동일한 원칙 — Device 없거나 데이터 없으면
-    // 기존 버퍼를 파괴하지 않고 false만 반환한다.
-    if (Device == nullptr || IndexData.empty())
-    {
-        return false;
-    }
-
-    if (StaticIB.GetBuffer() == nullptr ||
-        StaticIB.GetIndexCount() != static_cast<uint32>(IndexData.size()))
-    {
-        StaticIB.Create(Device, IndexData);
-    }
-
-    return StaticIB.GetBuffer() != nullptr;
-}
-
 bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* SkeletalMesh)
 {
+    if (SourceSkeletalMesh != SkeletalMesh)
+    {
+        MeshBuffer.Release();
+    }
+
     SourceSkeletalMesh = SkeletalMesh;
 
     if (SkeletalMesh == nullptr || !SkeletalMesh->HasValidMeshData())
     {
         SkinnedVertices.clear();
         IndexData.clear();
+        MeshBuffer.Release();
         return false;
     }
 
@@ -64,6 +29,7 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
     {
         SkinnedVertices.clear();
         IndexData.clear();
+        MeshBuffer.Release();
         return false;
     }
 
@@ -86,25 +52,56 @@ bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* Ske
     return true;
 }
 
+bool FSkinnedMeshRenderResource::EnsureMeshBuffer(ID3D11Device* Device)
+{
+    if (Device == nullptr)
+    {
+        return false;
+    }
+
+    if (SkinnedVertices.empty() || IndexData.empty())
+    {
+        if (!InitializeFromBindPose(SourceSkeletalMesh))
+        {
+            return false;
+        }
+    }
+
+    const FVertexBuffer& VertexBuffer = MeshBuffer.GetVertexBuffer();
+    const FIndexBuffer& IndexBuffer = MeshBuffer.GetIndexBuffer();
+    const bool bNeedsCreate =
+        !MeshBuffer.IsValid() ||
+        VertexBuffer.GetVertexCount() != static_cast<uint32>(SkinnedVertices.size()) ||
+        VertexBuffer.GetStride() != sizeof(FNormalVertex) ||
+        IndexBuffer.GetIndexCount() != static_cast<uint32>(IndexData.size());
+
+    if (bNeedsCreate)
+    {
+        MeshBuffer.CreateDynamic(Device, SkinnedVertices, IndexData);
+    }
+
+    return MeshBuffer.IsValid();
+}
+
 bool FSkinnedMeshRenderResource::Upload(ID3D11DeviceContext* Context)
 {
     if (Context == nullptr ||
-        DynamicSkinnedVertexBuffer.GetBuffer() == nullptr ||
+        MeshBuffer.GetVertexBuffer().GetBuffer() == nullptr ||
         SkinnedVertices.empty())
     {
         return false;
     }
 
     const uint32 UploadVertexCount = static_cast<uint32>(SkinnedVertices.size());
-    if (UploadVertexCount > DynamicSkinnedVertexBuffer.GetVertexCount() ||
-        DynamicSkinnedVertexBuffer.GetStride() != sizeof(FNormalVertex))
+    if (UploadVertexCount > MeshBuffer.GetVertexBuffer().GetVertexCount() ||
+        MeshBuffer.GetVertexBuffer().GetStride() != sizeof(FNormalVertex))
     {
         return false;
     }
 
     D3D11_MAPPED_SUBRESOURCE MappedResource = {};
     HRESULT hr = Context->Map(
-        DynamicSkinnedVertexBuffer.GetBuffer(),
+        MeshBuffer.GetVertexBuffer().GetBuffer(),
         0,
         D3D11_MAP_WRITE_DISCARD,
         0,
@@ -119,7 +116,7 @@ bool FSkinnedMeshRenderResource::Upload(ID3D11DeviceContext* Context)
         SkinnedVertices.data(),
         sizeof(FNormalVertex) * SkinnedVertices.size());
 
-    Context->Unmap(DynamicSkinnedVertexBuffer.GetBuffer(), 0);
+    Context->Unmap(MeshBuffer.GetVertexBuffer().GetBuffer(), 0);
     return true;
 }
 
@@ -128,8 +125,7 @@ void FSkinnedMeshRenderResource::Release()
     SourceSkeletalMesh = nullptr;
     SkinnedVertices.clear();
     IndexData.clear();
-    DynamicSkinnedVertexBuffer.Release();
-    StaticIB.Release();
+    MeshBuffer.Release();
 }
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
@@ -357,16 +353,15 @@ bool USkinnedMeshComponent::ConsumeRenderStateDirty()
     return bWasDirty;
 }
 
-bool USkinnedMeshComponent::EnsureDynamicSkinnedVertexBuffer(ID3D11Device* Device)
+bool USkinnedMeshComponent::EnsureSkinnedMeshBuffer(ID3D11Device* Device)
 {
     if (!HasValidMesh())
     {
-        SkinnedRenderResource.DynamicSkinnedVertexBuffer.Release();
+        SkinnedRenderResource.MeshBuffer.Release();
         return false;
     }
 
-    const uint32 VertexCount = static_cast<uint32>(SkeletalMeshAsset->GetVertices().size());
-    return SkinnedRenderResource.EnsureDynamicVertexBuffer(Device, VertexCount);
+    return SkinnedRenderResource.EnsureMeshBuffer(Device);
 }
 
 bool USkinnedMeshComponent::InitializeSkinnedVerticesFromBindPose()

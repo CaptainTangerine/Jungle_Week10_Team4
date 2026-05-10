@@ -6,6 +6,7 @@
 #include "Component/PrimitiveComponent.h"
 #include "Component/SkyAtmosphereComponent.h"
 #include "Component/ShapeComponent.h"
+#include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Component/SubUVComponent.h"
 #include "Component/TextRenderComponent.h"
@@ -13,6 +14,7 @@
 #include "Component/Light/LightComponent.h"
 #include "Core/ResourceManager.h"
 #include "Engine/Asset/StaticMesh.h"
+#include "Engine/Asset/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
 #include "Geometry/OBB.h"
@@ -599,6 +601,68 @@ void FPrimitiveRenderCollector::CollectFromComponent(
                 OutlineCmd.PerObjectConstants = FPerObjectConstants{
                     Primitive->GetWorldMatrix()
                 };
+                OutlineCmd.SectionIndexStart = Section.StartIndex;
+                OutlineCmd.SectionIndexCount = Section.IndexCount;
+                OutlineCmd.Material = Material;
+
+                RenderBus.AddCommand(ERenderPass::ToonOutline, OutlineCmd);
+            }
+        }
+
+        break;
+    }
+
+    case EPrimitiveType::EPT_SkinnedMesh:
+    {
+        if (!ShowFlags.bPrimitives) return;
+
+        USkinnedMeshComponent* SkinnedMeshComp = static_cast<USkinnedMeshComponent*>(Primitive);
+        const USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
+        if (!SkeletalMesh || !SkeletalMesh->HasValidMeshData()) return;
+
+        if (!SkinnedMeshComp->InitializeSkinnedVerticesFromBindPose())
+        {
+            return;
+        }
+
+        if (!SkinnedMeshComp->EnsureSkinnedMeshBuffer(MeshBufferManager->GetDevice()))
+        {
+            return;
+        }
+
+        FMeshBuffer* MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
+        if (!MeshBuffer->IsValid()) return;
+
+        const TArray<FSkeletalMeshSection>& Sections = SkeletalMesh->GetSections();
+        for (int32 SectionIdx = 0; SectionIdx < static_cast<int32>(Sections.size()); ++SectionIdx)
+        {
+            const FSkeletalMeshSection& Section = Sections[SectionIdx];
+            UMaterialInterface* Material = Cast<UMaterialInterface>(SkinnedMeshComp->GetMaterial(SectionIdx));
+            if (Material == nullptr)
+            {
+                Material = FResourceManager::Get().GetMaterial("DefaultWhite");
+                if (Material == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            FRenderCommand Cmd = {};
+            Cmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix(), FColor::White().ToVector4() };
+            Cmd.Type = ERenderCommandType::StaticMesh;
+            Cmd.MeshBuffer = MeshBuffer;
+            Cmd.SectionIndexStart = Section.StartIndex;
+            Cmd.SectionIndexCount = Section.IndexCount;
+            Cmd.Material = Material;
+
+            RenderBus.AddCommand(ERenderPass::Opaque, Cmd);
+
+            if (Material->GetEffectiveLightingModel() == ELightingModel::Toon)
+            {
+                FRenderCommand OutlineCmd = {};
+                OutlineCmd.Type = ERenderCommandType::ToonOutline;
+                OutlineCmd.MeshBuffer = MeshBuffer;
+                OutlineCmd.PerObjectConstants = FPerObjectConstants{ Primitive->GetWorldMatrix() };
                 OutlineCmd.SectionIndexStart = Section.StartIndex;
                 OutlineCmd.SectionIndexCount = Section.IndexCount;
                 OutlineCmd.Material = Material;
