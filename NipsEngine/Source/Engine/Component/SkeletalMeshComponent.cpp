@@ -4,6 +4,7 @@
 #include "Core/ResourceManager.h"
 
 #include <algorithm>
+#include <cfloat>
 
 DEFINE_CLASS(USkeletalMeshComponent, UMeshComponent)
 REGISTER_FACTORY(USkeletalMeshComponent)
@@ -395,7 +396,90 @@ void USkeletalMeshComponent::UpdateWorldAABB() const
 
 bool USkeletalMeshComponent::RaycastMesh(const FRay& Ray, FHitResult& OutHitResult)
 {
-    return false;
+    if (!HasValidMesh())
+    {
+        return false;
+    }
+
+    EnsureBoundsUpdated();
+
+    float BoxT = 0.0f;
+    if (!WorldAABB.IntersectRay(Ray, BoxT))
+    {
+        return false;
+    }
+
+    const FSkeletalMesh* MeshData = GetSkeletalMeshData();
+    const TArray<FNormalVertex>& Vertices = GetSkinnedVertices();
+    const TArray<uint32>& Indices = MeshData->GetIndices();
+
+    if (Vertices.empty() || Indices.empty())
+    {
+        return false;
+    }
+
+    const FMatrix WorldMatrix = GetWorldMatrix();
+    const FMatrix InvWorld = WorldMatrix.GetInverse();
+
+    FRay LocalRay = Ray;
+    LocalRay.Origin = InvWorld.TransformPosition(LocalRay.Origin);
+    LocalRay.Direction = InvWorld.TransformVector(LocalRay.Direction);
+    LocalRay.Direction.NormalizeSafe();
+
+    bool bHit = false;
+    float ClosestT = FLT_MAX;
+    int32 BestFaceIndex = -1;
+    FVector BestLocalNormal = FVector::ZeroVector;
+
+    for (uint32 i = 0; i + 2 < static_cast<uint32>(Indices.size()); i += 3)
+    {
+        const uint32 I0 = Indices[i];
+        const uint32 I1 = Indices[i + 1];
+        const uint32 I2 = Indices[i + 2];
+
+        if (I0 >= Vertices.size() || I1 >= Vertices.size() || I2 >= Vertices.size())
+        {
+            continue;
+        }
+
+        const FVector& V0 = Vertices[I0].Position;
+        const FVector& V1 = Vertices[I1].Position;
+        const FVector& V2 = Vertices[I2].Position;
+
+        float HitT = 0.0f;
+        if (IntersectTriangle(LocalRay.Origin, LocalRay.Direction, V0, V1, V2, HitT))
+        {
+            if (HitT < ClosestT)
+            {
+                ClosestT = HitT;
+                bHit = true;
+                BestFaceIndex = static_cast<int32>(i / 3);
+
+                const FVector Edge1 = V1 - V0;
+                const FVector Edge2 = V2 - V0;
+                BestLocalNormal = FVector::CrossProduct(Edge1, Edge2).GetSafeNormal();
+            }
+        }
+    }
+
+    if (!bHit)
+    {
+        return false;
+    }
+
+    const FVector LocalHitLocation = LocalRay.Origin + LocalRay.Direction * ClosestT;
+    const FVector WorldHitLocation = WorldMatrix.TransformPosition(LocalHitLocation);
+    FVector WorldNormal = WorldMatrix.TransformVector(BestLocalNormal);
+    WorldNormal.NormalizeSafe();
+
+    OutHitResult.bHit = true;
+    OutHitResult.HitComponent = this;
+    OutHitResult.Distance = (WorldHitLocation - Ray.Origin).Size();
+    OutHitResult.Location = WorldHitLocation;
+    OutHitResult.Normal = WorldNormal;
+    OutHitResult.FaceIndex = BestFaceIndex;
+
+    return true;
 }
 
 const FAABB& USkeletalMeshComponent::GetWorldAABB() const
