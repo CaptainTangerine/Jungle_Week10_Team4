@@ -134,7 +134,7 @@ void FFBXImporter::TraversalNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImpor
     {
         const bool bHasSkin = Mesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
 
-        if (bHasSkin)
+        if (bHasSkin && !ImportOptions.bImportSkinnedMeshesAsStatic)
         {
             FFBXSkeletalMeshImportData SkeletalMeshData = {};
             SkeletalMeshData.SourceNodeIndex = curNodeIndex;

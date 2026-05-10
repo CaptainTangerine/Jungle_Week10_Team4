@@ -61,6 +61,9 @@ protected:
     void EnsureBoundsUpdated() const;
     void RebuildMaterialsFromMesh();
 
+    // DFS를 통해서 Bone GlobalTrnasform 재계산
+    void RebuildCurrentBoneGlobalTransforms(const TArray<FBoneInfo>& Bones);
+
 protected:
     USkeletalMesh* SkeletalMeshAsset = nullptr;
     FString SkeletalMeshAssetPath;

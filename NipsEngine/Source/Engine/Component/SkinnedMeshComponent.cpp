@@ -1,10 +1,22 @@
 ﻿#include "SkinnedMeshComponent.h"
 
+#include "Core/PlatformTime.h"
 #include "Render/Resource/Material.h"
 
 #include <cfloat>
+#include <cmath>
 
 DEFINE_CLASS(USkinnedMeshComponent, UMeshComponent)
+REGISTER_FACTORY(USkinnedMeshComponent)
+
+
+enum class EBoneVisitState : uint8
+{
+    Unvisited,
+    Visiting,
+    Complete
+};
+
 
 bool FSkinnedMeshRenderResource::InitializeFromBindPose(const USkeletalMesh* SkeletalMesh)
 {
@@ -388,23 +400,194 @@ bool USkinnedMeshComponent::UploadSkinnedVertices(ID3D11DeviceContext* Context)
 
 void USkinnedMeshComponent::UpdateCPUSkinning()
 {
+    if (SkeletalMeshAsset == nullptr || !SkeletalMeshAsset->HasValidMeshData())
+    {
+        return;
+    }
+
     const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
     const TArray<FSkeletalVertex>& SourceVertices = SkeletalMeshAsset->GetVertices();
+
+    if (Bones.empty() || SourceVertices.empty())
+    {
+        return;
+    }
+
+    if (SkinnedRenderResource.SkinnedVertices.size() != SourceVertices.size())
+    {
+        InitializeSkinnedVerticesFromBindPose();
+    }
 
     CurrentBoneLocalTransforms.resize(Bones.size());
     CurrentBoneGlobalMeshTransforms.resize(Bones.size());
 
-    for (int32 i = 0; i < Bones.size(); ++i)
+    // 현재 프레임의 Bone Local Trnasform 구성
+    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
     {
-        CurrentBoneLocalTransforms[i] = Bones[i].LocalTransform;
+        CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
     }
 
-    for (int32 i = 0; i < Bones.size(); ++i)
+    // 하드코딩으로 neck 본 LocalTrnasform 변경
+    const double TimeSeconds = FPlatformTime::Seconds();
+    float DebugOffset = static_cast<float>(std::sin(TimeSeconds * 0.75) * 2.0);
+    DebugOffset = std::max(0.f, DebugOffset);
+
+    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
     {
-        CurrentBoneGlobalMeshTransforms[i] = Bones[i].GlobalTransform;
+        const FString& BoneName = Bones[BoneIdx].Name;
+        const bool bIsHeadBone = BoneName.find("neck") != FString::npos;
+
+        if (!bIsHeadBone)
+        {
+            continue;
+        }
+
+        const FMatrix OffsetTransform = FMatrix::MakeTranslation(FVector(0.f, DebugOffset, 0.f));
+        CurrentBoneLocalTransforms[BoneIdx] = CurrentBoneLocalTransforms[BoneIdx] * OffsetTransform;
+        break;
     }
 
+    // 변환된 Local로 GloabalTrnasform 계산
+    // 인덱스 순서가 부모부터 시작된다는 보장이 없다고 판단하여 DFS로 순회하면서 보장
+    RebuildCurrentBoneGlobalTransforms(Bones);
 
+    for (int32 VertexIdx = 0; VertexIdx < static_cast<int32>(SourceVertices.size()); ++VertexIdx)
+    {
+        const FSkeletalVertex& SrcVertex = SourceVertices[VertexIdx];
+        FNormalVertex& DstVertex = SkinnedRenderResource.SkinnedVertices[VertexIdx];
+
+        FVector SkinnedPosition = {};
+        FVector SkinnedNormal = {};
+        FVector SkinnedTangent = {};
+        FVector SkinnedBiTangent = {};
+
+        float TotalWeight = 0.f;
+
+        for (int32 BlendIdx = 0; BlendIdx < 4; ++BlendIdx)
+        {
+            int32 BoneIndex = SrcVertex.BoneIndices[BlendIdx];
+            const float TargetBoneWeight = SrcVertex.BoneWeights[BlendIdx];
+
+            if (TargetBoneWeight <= 0.f)
+            {
+                continue;
+            }
+            TotalWeight += TargetBoneWeight;
+
+            FMatrix SkinnedMatrix = FMatrix::Identity;
+
+            SkinnedMatrix = Bones[BoneIndex].InverseBindTransform * CurrentBoneGlobalMeshTransforms[BoneIndex];
+
+            SkinnedPosition += SkinnedMatrix.TransformPosition(SrcVertex.Position) * TargetBoneWeight;
+            SkinnedNormal += SkinnedMatrix.TransformVector(SrcVertex.Normal) * TargetBoneWeight;
+            SkinnedTangent += SkinnedMatrix.TransformVector(SrcVertex.Tangent) * TargetBoneWeight;
+            SkinnedBiTangent += SkinnedMatrix.TransformVector(SrcVertex.Bitangent) * TargetBoneWeight;
+        }
+
+        if (TotalWeight > 0.0f)
+        {
+            DstVertex.Position = SkinnedPosition;
+            DstVertex.Normal = SkinnedNormal.GetSafeNormal();
+            DstVertex.Tangent = SkinnedTangent.GetSafeNormal();
+            DstVertex.Bitangent = SkinnedBiTangent.GetSafeNormal();
+        }
+        else
+        {
+            // Bone weight가 없는 정점은 bind pose 그대로 둠
+            DstVertex.Position = SrcVertex.Position;
+            DstVertex.Normal = SrcVertex.Normal;
+            DstVertex.Tangent = SrcVertex.Tangent;
+            DstVertex.Bitangent = SrcVertex.Bitangent;
+        }
+
+        DstVertex.Color = SrcVertex.Color;
+        DstVertex.UVs = SrcVertex.UVs;
+    }
+
+    MarkBoundsDirty();
+    MarkRenderStateDirty();
+}
+
+void USkinnedMeshComponent::RebuildCurrentBoneGlobalTransforms(const TArray<FBoneInfo>& Bones)
+{
+    const int32 BoneCount = static_cast<int32>(Bones.size());
+    if (BoneCount <= 0)
+    {
+        CurrentBoneGlobalMeshTransforms.clear();
+        return;
+    }
+
+    CurrentBoneGlobalMeshTransforms.resize(Bones.size());
+
+    TArray<EBoneVisitState> VisitStates;
+    VisitStates.resize(Bones.size(), EBoneVisitState::Unvisited);
+
+    for (int32 StartBoneIndex = 0; StartBoneIndex < BoneCount; ++StartBoneIndex)
+    {
+        if (VisitStates[StartBoneIndex] == EBoneVisitState::Complete)
+        {
+            continue;
+        }
+
+        TArray<int32> Stack;
+        Stack.push_back(StartBoneIndex);
+
+        while (!Stack.empty())
+        {
+            const int32 BoneIndex = Stack.back();
+
+            if (BoneIndex < 0 || BoneIndex >= BoneCount)
+            {
+                Stack.pop_back();
+                continue;
+            }
+
+            if (VisitStates[BoneIndex] == EBoneVisitState::Complete)
+            {
+                Stack.pop_back();
+                continue;
+            }
+
+            const int32 ParentIndex = Bones[BoneIndex].ParentIndex;
+            const bool bHasValidParent = ParentIndex >= 0 && ParentIndex < BoneCount;
+
+            if (VisitStates[BoneIndex] == EBoneVisitState::Unvisited)
+            {
+                VisitStates[BoneIndex] = EBoneVisitState::Visiting;
+
+                if (bHasValidParent)
+                {
+                    if (VisitStates[ParentIndex] == EBoneVisitState::Visiting)
+                    {
+                        CurrentBoneGlobalMeshTransforms[BoneIndex] = CurrentBoneLocalTransforms[BoneIndex];
+                        VisitStates[BoneIndex] = EBoneVisitState::Complete;
+                        Stack.pop_back();
+                        continue;
+                    }
+
+                    if (VisitStates[ParentIndex] != EBoneVisitState::Complete)
+                    {
+                        Stack.push_back(ParentIndex);
+                        continue;
+                    }
+                }
+            }
+
+            if (bHasValidParent && VisitStates[ParentIndex] == EBoneVisitState::Complete)
+            {
+                CurrentBoneGlobalMeshTransforms[BoneIndex] =
+                    CurrentBoneLocalTransforms[BoneIndex] *
+                    CurrentBoneGlobalMeshTransforms[ParentIndex];
+            }
+            else
+            {
+                CurrentBoneGlobalMeshTransforms[BoneIndex] = CurrentBoneLocalTransforms[BoneIndex];
+            }
+
+            VisitStates[BoneIndex] = EBoneVisitState::Complete;
+            Stack.pop_back();
+        }
+    }
 }
 
 
