@@ -22,6 +22,7 @@ struct FFrustum;
 class FRenderCollector {
 private:
     FMeshBufferManager MeshBufferManager;
+    ID3D11DeviceContext* DeviceContext = nullptr;
     FLightRenderCollector LightRenderCollector;
     FOverlayRenderCollector OverlayRenderCollector;
     FPrimitiveRenderCollector PrimitiveRenderCollector;
@@ -30,7 +31,7 @@ private:
 
     // ────── Initialize & Release ─────────────────────────────────────────────
 public:
-    void Initialize(ID3D11Device* InDevice);
+    void Initialize(ID3D11Device* InDevice, ID3D11DeviceContext* InDeviceContext);
     void Release();
     void SetLineBatcher(FLineBatcher* InLineBatcher) { LineBatcher = InLineBatcher; }
     void SetRingBatcher(FRingBatcher* InRingBatcher) { RingBatcher = InRingBatcher; }

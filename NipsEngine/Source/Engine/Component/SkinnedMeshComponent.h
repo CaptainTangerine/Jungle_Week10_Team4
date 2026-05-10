@@ -46,6 +46,8 @@ public:
     bool EnsureSkinnedMeshBuffer(ID3D11Device* Device);
     bool InitializeSkinnedVerticesFromBindPose();
     bool UploadSkinnedVertices(ID3D11DeviceContext* Context);
+    void UpdateCPUSkinning();
+
     void ReleaseDynamicSkinResources();
 
     FSkinnedMeshRenderResource& GetSkinnedMeshRenderResource() { return SkinnedRenderResource; }
@@ -61,11 +63,12 @@ protected:
 
 protected:
     USkeletalMesh* SkeletalMeshAsset = nullptr;
-
+    FString SkeletalMeshAssetPath;
     // SkeletalMeshAsset은 공유되는 자원이라 FSkinnedMeshRenderResource 내부에 SkinnedVertices 보관
     FSkinnedMeshRenderResource SkinnedRenderResource;
 
-    FString SkeletalMeshAssetPath;
+    TArray<FMatrix> CurrentBoneLocalTransforms;
+    TArray<FMatrix> CurrentBoneGlobalMeshTransforms;
 
     mutable bool bBoundsDirty = true;
     bool bRenderStateDirty = true;

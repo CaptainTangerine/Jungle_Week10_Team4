@@ -9,7 +9,7 @@
 FGameRenderPipeline::FGameRenderPipeline(UGameEngine* InGameEngine, FRenderer& InRenderer)
     : GameEngine(InGameEngine)
 {
-    Collector.Initialize(InRenderer.GetFD3DDevice().GetDevice());
+    Collector.Initialize(InRenderer.GetFD3DDevice().GetDevice(), InRenderer.GetFD3DDevice().GetDeviceContext());
 }
 
 FGameRenderPipeline::~FGameRenderPipeline()

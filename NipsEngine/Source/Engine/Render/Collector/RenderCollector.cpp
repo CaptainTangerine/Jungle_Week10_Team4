@@ -113,8 +113,9 @@ void FRenderCollector::ResetShadowStats()
     LastStats.Shadow = {};
 }
 
-void FRenderCollector::Initialize(ID3D11Device* InDevice)
+void FRenderCollector::Initialize(ID3D11Device* InDevice, ID3D11DeviceContext* InDeviceContext)
 {
+    DeviceContext = InDeviceContext;
     MeshBufferManager.Create(InDevice);
     LightRenderCollector.Initialize(&MeshBufferManager);
     OverlayRenderCollector.Initialize(&MeshBufferManager);
@@ -125,6 +126,7 @@ void FRenderCollector::Release()
 {
     LineBatcher = nullptr;
     RingBatcher = nullptr;
+    DeviceContext = nullptr;
     LightRenderCollector.Release();
     OverlayRenderCollector.Release();
     PrimitiveRenderCollector.Release();
@@ -274,7 +276,8 @@ void FRenderCollector::PrepareSkinnedMeshResources(UWorld* World)
     }
 
     ID3D11Device* Device = MeshBufferManager.GetDevice();
-    if (Device == nullptr)
+    ID3D11DeviceContext* Context = DeviceContext;
+    if (Device == nullptr || Context == nullptr)
     {
         return;
     }
@@ -300,7 +303,9 @@ void FRenderCollector::PrepareSkinnedMeshResources(UWorld* World)
                 continue;
             }
 
+            SkinnedMeshComp->UpdateCPUSkinning();
             SkinnedMeshComp->EnsureSkinnedMeshBuffer(Device);
+            SkinnedMeshComp->UploadSkinnedVertices(Context);
         }
     }
 }

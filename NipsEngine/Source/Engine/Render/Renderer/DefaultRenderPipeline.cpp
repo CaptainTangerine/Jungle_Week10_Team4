@@ -8,7 +8,7 @@
 FDefaultRenderPipeline::FDefaultRenderPipeline(UEngine* InEngine, FRenderer& InRenderer)
     : Engine(InEngine)
 {
-    Collector.Initialize(InRenderer.GetFD3DDevice().GetDevice());
+    Collector.Initialize(InRenderer.GetFD3DDevice().GetDevice(), InRenderer.GetFD3DDevice().GetDeviceContext());
 }
 
 FDefaultRenderPipeline::~FDefaultRenderPipeline()

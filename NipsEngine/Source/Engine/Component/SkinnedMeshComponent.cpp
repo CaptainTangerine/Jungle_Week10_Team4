@@ -386,6 +386,28 @@ bool USkinnedMeshComponent::UploadSkinnedVertices(ID3D11DeviceContext* Context)
     return SkinnedRenderResource.Upload(Context);
 }
 
+void USkinnedMeshComponent::UpdateCPUSkinning()
+{
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    const TArray<FSkeletalVertex>& SourceVertices = SkeletalMeshAsset->GetVertices();
+
+    CurrentBoneLocalTransforms.resize(Bones.size());
+    CurrentBoneGlobalMeshTransforms.resize(Bones.size());
+
+    for (int32 i = 0; i < Bones.size(); ++i)
+    {
+        CurrentBoneLocalTransforms[i] = Bones[i].LocalTransform;
+    }
+
+    for (int32 i = 0; i < Bones.size(); ++i)
+    {
+        CurrentBoneGlobalMeshTransforms[i] = Bones[i].GlobalTransform;
+    }
+
+
+}
+
+
 void USkinnedMeshComponent::ReleaseDynamicSkinResources()
 {
     SkinnedRenderResource.Release();
