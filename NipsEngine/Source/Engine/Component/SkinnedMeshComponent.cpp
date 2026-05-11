@@ -429,7 +429,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
     // 하드코딩으로 neck 본 LocalTrnasform 변경
     const double TimeSeconds = FPlatformTime::Seconds();
-    constexpr float DegToRad = 3.14159265358979323846f / 180.0f;
+    constexpr float DegToRad = MathUtil::PI / 180.0f;
     const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 5) * DegToRad;
 
     for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
@@ -454,6 +454,15 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     // 인덱스 순서가 부모부터 시작된다는 보장이 없다고 판단하여 DFS로 순회하면서 보장
     RebuildCurrentBoneGlobalTransforms(Bones);
 
+    const int32 BoneCount = static_cast<int32>(Bones.size());
+    TArray<FMatrix> SkinningMatrices(BoneCount);
+    for (int32 BoneIdx = 0; BoneIdx < BoneCount; ++BoneIdx)
+    {
+        SkinningMatrices[BoneIdx] = Bones[BoneIdx].InverseBindTransform * CurrentBoneGlobalMeshTransforms[BoneIdx];
+    }
+
+    // 매 프레임 마다 Vertex 마다 수정을 해서 비효율
+    // TODO : CPU Skinning으로 가중치를 셰이더에서 계산
     for (int32 VertexIdx = 0; VertexIdx < static_cast<int32>(SourceVertices.size()); ++VertexIdx)
     {
         const FSkeletalVertex& SrcVertex = SourceVertices[VertexIdx];
@@ -468,7 +477,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
         for (int32 BlendIdx = 0; BlendIdx < 4; ++BlendIdx)
         {
-            int32 BoneIndex = SrcVertex.BoneIndices[BlendIdx];
+            const int32 BoneIndex = SrcVertex.BoneIndices[BlendIdx];
             const float TargetBoneWeight = SrcVertex.BoneWeights[BlendIdx];
 
             if (TargetBoneWeight <= 0.f)
@@ -477,9 +486,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
             }
             TotalWeight += TargetBoneWeight;
 
-            FMatrix SkinnedMatrix = FMatrix::Identity;
-
-            SkinnedMatrix = Bones[BoneIndex].InverseBindTransform * CurrentBoneGlobalMeshTransforms[BoneIndex];
+            const FMatrix& SkinnedMatrix = SkinningMatrices[BoneIndex];
 
             SkinnedPosition += SkinnedMatrix.TransformPosition(SrcVertex.Position) * TargetBoneWeight;
             SkinnedNormal += SkinnedMatrix.TransformVector(SrcVertex.Normal) * TargetBoneWeight;
@@ -572,6 +579,9 @@ void USkinnedMeshComponent::RebuildCurrentBoneGlobalTransforms(const TArray<FBon
     TArray<EBoneVisitState> VisitStates;
     VisitStates.resize(Bones.size(), EBoneVisitState::Unvisited);
 
+    TArray<int32> Stack;
+    Stack.reserve(BoneCount);
+
     for (int32 StartBoneIndex = 0; StartBoneIndex < BoneCount; ++StartBoneIndex)
     {
         if (VisitStates[StartBoneIndex] == EBoneVisitState::Complete)
@@ -579,7 +589,7 @@ void USkinnedMeshComponent::RebuildCurrentBoneGlobalTransforms(const TArray<FBon
             continue;
         }
 
-        TArray<int32> Stack;
+        Stack.clear();
         Stack.push_back(StartBoneIndex);
 
         while (!Stack.empty())

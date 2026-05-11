@@ -106,12 +106,8 @@ namespace
                     continue;
                 }
 
-                const FMatrix BoneBindActorTransform =
-                    BoneBindGlobalMeshTransform *
-                    SkinnedMeshComponent->GetRelativeMatrix();
-                const FMatrix AttachLocalOffset =
-                    StaticNode.GlobalTransformMatrix *
-                    BoneBindActorTransform.GetInverse();
+                const FMatrix BoneBindActorTransform = BoneBindGlobalMeshTransform * SkinnedMeshComponent->GetRelativeMatrix();
+                const FMatrix AttachLocalOffset = StaticNode.GlobalTransformMatrix * BoneBindActorTransform.GetInverse();
 
                 StaticMeshComponent->AttachToBone(SkinnedMeshComponent, BoneIndex, AttachLocalOffset);
                 return true;

@@ -178,7 +178,7 @@ FUberSurfaceData EvaluateSurface(FUberPSInput Input)
     if (bHasDiffuseMap != 0u)
     {
         Surface.DiffuseSample = DiffuseMap.Sample(SampleState, Surface.UV);
-        clip(Surface.DiffuseSample.a - 0.001f);
+        clip(Surface.DiffuseSample.a - 0.1f);
     }
 
     Surface.WorldNormal = ResolveSurfaceWorldNormal(Input, Surface.UV, Surface.WorldNormal);
