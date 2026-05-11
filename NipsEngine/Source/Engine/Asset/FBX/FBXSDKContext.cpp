@@ -22,6 +22,7 @@ bool FFBXSDKContext::Initialize()
     {
         return true;
     }
+
     Manager = FbxManager::Create();
     if (Manager == nullptr)
     {

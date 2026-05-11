@@ -22,6 +22,11 @@ public:
     FViewportCamera& GetCamera() { return Camera; }
     const FViewportCamera& GetCamera() const { return Camera; }
 
+    bool GetShowGrid() const { return bShowGrid; }
+    bool GetShowAxis() const { return bShowAxis; }
+    void SetShowGrid(bool bIn) { bShowGrid = bIn; }
+    void SetShowAxis(bool bIn) { bShowAxis = bIn; }
+
     void Tick(float DeltaTime) override;
     void BuildSceneView(FSceneView& OutView) const override;
 
@@ -30,5 +35,8 @@ private:
     UWorld* PreviewWorld = nullptr;
     FViewportCamera Camera;
     FViewportRect ViewRect;
+
+    bool bShowGrid = true;
+    bool bShowAxis = false;
 
 };

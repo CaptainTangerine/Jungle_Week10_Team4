@@ -312,6 +312,7 @@ void FEditorFBXSceneViewWidget::RenderViewport()
 
 void FEditorFBXSceneViewWidget::RenderToolbar()
 {
+    // --- 액션 버튼 ---
     if (ImGui::Button("Open FBX"))
     {
         FString PickedPath;
@@ -334,6 +335,27 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         StatusMessage = "No FBX loaded.";
     }
 
+    // --- Show Flags ---
+    ImGui::Separator();
+    ImGui::TextDisabled("Show Flags");
+    ImGui::SameLine();
+
+    if (EditorEngine)
+    {
+        FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
+
+        bool bGrid = FBXClient.GetShowGrid();
+        bool bAxis = FBXClient.GetShowAxis();
+        if (ImGui::Checkbox("Grid", &bGrid))   { FBXClient.SetShowGrid(bGrid); }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("Axis", &bAxis))   { FBXClient.SetShowAxis(bAxis); }
+        ImGui::SameLine();
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    ImGui::TextDisabled("Import");
     ImGui::SameLine();
     if (ImGui::Checkbox("Skinned -> Static", &bImportSkinnedMeshesAsStatic) && !LoadedFilePath.empty())
     {

@@ -338,9 +338,12 @@ UWorld* UEditorEngine::EnsureFBXPreviewWorld()
 
 UWorld* UEditorEngine::ResetFBXPreviewWorld()
 {
+    FBXPreviewViewport.SetWorld(nullptr);  // dangling pointer 방지
     const FName Handle = GetFBXPreviewWorldHandle();
     DestroyWorldContext(Handle);
-    return EnsureFBXPreviewWorld();
+    UWorld* NewWorld = EnsureFBXPreviewWorld();
+    FBXPreviewViewport.SetWorld(NewWorld); // 새 월드로 재연결
+    return NewWorld;
 }
 
 UWorld* UEditorEngine::GetFBXPreviewWorld() const

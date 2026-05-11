@@ -181,6 +181,7 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     UWorld* FBXWorld = FBXClient.GetWorld();
     if (!FBXWorld) { return; }
 
+    const FEditorSettings& Settings = Editor->GetSettings();
     FSceneView SceneView;
     FBXClient.BuildSceneView(SceneView);
 
@@ -196,9 +197,9 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     Renderer.BeginViewportFrame(&RTS);
 
     FShowFlags FBXShowFlags;
-    FBXShowFlags.bGrid   = false;
-    FBXShowFlags.bAxis   = false;
-    FBXShowFlags.bGizmo  = false;
+    FBXShowFlags.bGrid  = FBXClient.GetShowGrid();
+    FBXShowFlags.bAxis  = FBXClient.GetShowAxis();
+    FBXShowFlags.bGizmo = false;
 
     Bus.Clear();
     Bus.SetViewProjection(SceneView.ViewMatrix, SceneView.ProjectionMatrix);
@@ -214,8 +215,16 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     Collector.SetRingBatcher(&Renderer.GetDebugRingBatcher());
     Collector.CollectWorld(FBXWorld, FBXShowFlags, SceneView.ViewMode, Bus, &SceneView.CameraFrustum);
 
+    Collector.CollectGrid(
+        Settings.GridSpacing,
+        Settings.GridHalfLineCount,
+        Bus,
+        false,
+        Settings.GridRenderSettings);
+
     Renderer.PrepareBatchers(Bus);
     Renderer.Render(Bus);
 
-    FBXPreviewSRV = Resource.ColorSRV.Get();
+    // GridRenderPass 등 후속 패스가 합성된 최종 결과를 사용
+    FBXPreviewSRV = RTS.FinalSRV;
 }
