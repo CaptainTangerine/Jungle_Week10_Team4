@@ -21,25 +21,36 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
     GetLuaScriptSubsystem().SetScriptHotReloadEnabled(true);
     FEditorSettings::Get().LoadFromFile(FEditorSettings::GetDefaultSettingsPath());
 
-    MainPanel.Create(Window, Renderer, this);
     if (WorldList.empty())
     {
         CreateWorldContext(EWorldType::Editor, FName("Default"));
     }
     SetActiveWorld(WorldList[0].ContextHandle);
     ApplySpatialIndexMaintenanceSettings(WorldList[0].World);
+    EnsureFBXPreviewWorld();
+
+    MainPanel.Create(Window, Renderer, this);
 
     // Selection & Gizmo
     SelectionManager.Init();
     ViewportLayout.Init(InWindow, GetWorld(), &SelectionManager, this);
+
+
+    FBXPreviewViewport.Initialize(InWindow);
+
     GetFocusedWorld()->SetActiveCamera(GetCamera());
 
     // Slate 초기화 및 Viewport Layout 추가
     FSlateApplication::Get().Initialize();
     ViewportLayout.BuildViewportLayout(static_cast<int32>(Window->GetWidth()), static_cast<int32>(Window->GetHeight()));
+   
 
     // Editor용 렌더 파이프라인 세팅
     SetRenderPipeline(std::make_unique<FEditorRenderPipeline>(this, Renderer));
+
+    // FBX Preview Viewport 초기화
+    FBXPreviewViewport.Initialize(InWindow);
+    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 }
 
 void UEditorEngine::Shutdown()
@@ -51,6 +62,8 @@ void UEditorEngine::Shutdown()
         FEditorSettings::Get().SplitterHRatio = SH->GetSplitRatio();
 
     FEditorSettings::Get().SaveToFile(FEditorSettings::GetDefaultSettingsPath());
+
+    FBXPreviewViewport.SetWorld(nullptr);
 
     CloseScene();
     SelectionManager.Shutdown();
@@ -265,6 +278,7 @@ void UEditorEngine::ResetViewport()
 void UEditorEngine::CloseScene()
 {
     SelectionManager.ClearSelection();
+    FBXPreviewViewport.SetWorld(nullptr);
 
     for (FWorldContext& Ctx : WorldList)
     {
@@ -292,8 +306,52 @@ void UEditorEngine::NewScene()
     FWorldContext& Ctx = CreateWorldContext(EWorldType::Editor, FName("NewScene"), "New Scene");
     SetActiveWorld(Ctx.ContextHandle);
     ApplySpatialIndexMaintenanceSettings(Ctx.World);
+    EnsureFBXPreviewWorld();
+    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 
     ResetViewport();
+}
+
+UWorld* UEditorEngine::EnsureFBXPreviewWorld()
+{
+    const FName Handle = GetFBXPreviewWorldHandle();
+    if (FWorldContext* ExistingContext = GetWorldContextFromHandle(Handle))
+    {
+        if (ExistingContext->World)
+        {
+            ExistingContext->WorldType = EWorldType::ViewerPreview;
+            ExistingContext->World->SetWorldType(EWorldType::ViewerPreview);
+            ApplySpatialIndexMaintenanceSettings(ExistingContext->World);
+        }
+        return ExistingContext->World;
+    }
+
+    FWorldContext& Ctx = CreateWorldContext(EWorldType::ViewerPreview, Handle, "FBX Preview World");
+    if (Ctx.World)
+    {
+        Ctx.World->SetWorldType(EWorldType::ViewerPreview);
+        ApplySpatialIndexMaintenanceSettings(Ctx.World);
+    }
+
+    return Ctx.World;
+}
+
+UWorld* UEditorEngine::ResetFBXPreviewWorld()
+{
+    const FName Handle = GetFBXPreviewWorldHandle();
+    DestroyWorldContext(Handle);
+    return EnsureFBXPreviewWorld();
+}
+
+UWorld* UEditorEngine::GetFBXPreviewWorld() const
+{
+    const FWorldContext* Ctx = GetWorldContextFromHandle(GetFBXPreviewWorldHandle());
+    return Ctx ? Ctx->World : nullptr;
+}
+
+FName UEditorEngine::GetFBXPreviewWorldHandle() const
+{
+    return FName("FBXPreviewWorld");
 }
 
 void UEditorEngine::ApplySpatialIndexMaintenanceSettings(UWorld* TargetWorld)

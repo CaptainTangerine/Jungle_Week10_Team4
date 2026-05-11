@@ -385,9 +385,11 @@ copy /Y "$(ProjectDir)ThirdParty\FBX SDK\lib\x64\release\libfbxsdk.dll" "$(OutDi
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Shipping|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source\Editor\Viewport\FBXPreviewViewportClient.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FBXImporter.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSceneTreeBuilder.cpp" />
     <ClCompile Include="Source\Engine\Asset\FBX\FBXSDKContext.cpp" />
+    <ClInclude Include="Source\Editor\Viewport\FBXPreviewViewportClient.h" />
     <ClInclude Include="Source\Engine\Asset\SkeletalMesh.h" />
     <ClInclude Include="Source\Engine\Asset\SkeletalMeshTypes.h" />
     <ClCompile Include="Source\Engine\Asset\SkeletalMesh.cpp" />

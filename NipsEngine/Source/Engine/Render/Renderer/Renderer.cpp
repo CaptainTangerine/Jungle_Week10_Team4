@@ -81,7 +81,7 @@ void FRenderer::CreateResources()
     // 텍스처는 ResourceManager가 소유 — Batcher 는 셰이더/버퍼만 초기화
     FontBatcher.Create(Device.GetDevice());
     SubUVBatcher.Create(Device.GetDevice());
-    FUIManager::Get().Initialize(Device.GetDevice());
+    //FUIManager::Get().Initialize(Device.GetDevice());
     SceneLightBuffer.Create(Device.GetDevice(), sizeof(FGPULight), MaxSceneGlobalLightCount);
     SceneGlobalLightUploadScratch.reserve(MaxSceneGlobalLightCount);
 
@@ -354,7 +354,7 @@ void FRenderer::Render(const FRenderBus& InRenderBus)
 
 FViewportRenderResource& FRenderer::AcquireViewportResource(uint32 Width, uint32 Height, int32 Index)
 {
-    assert(Index < 4 && "Index Out of Bound");
+    assert(Index < 5 && "Index Out of Bound");
 
     FViewportRenderResource& Res = ViewportResources[Index];
 
@@ -440,7 +440,7 @@ void FRenderer::InitializeViewportResource(uint32 Width, uint32 Height, int32 In
 
 void FRenderer::ReleaseViewportResource(int32 Index)
 {
-    assert(Index < 4 && "Index Out of Bound");
+    assert(Index < 5 && "Index Out of Bound");
 
     FViewportRenderResource& Res = ViewportResources[Index];
 

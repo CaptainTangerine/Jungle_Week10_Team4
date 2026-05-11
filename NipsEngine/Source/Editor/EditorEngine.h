@@ -10,6 +10,7 @@
 #include "Editor/Selection/SelectionManager.h"
 #include "Engine/Viewport/ViewportCamera.h"
 #include "Editor/Viewport/ViewportLayout.h"
+#include "Editor/Viewport/FBXPreviewViewportClient.h"
 
 class UGizmoComponent;
 class FEditorRenderPipeline;
@@ -40,6 +41,8 @@ public:
     void ResetViewport();
     void CloseScene();
     void NewScene();
+
+    
     virtual void ApplySpatialIndexMaintenanceSettings(UWorld* TargetWorld) override;
 
     FEditorSettings& GetSettings() { return FEditorSettings::Get(); }
@@ -92,9 +95,21 @@ public:
     void UnregisterWorld(const FName& Handle);
     FName GetEditorWorldHandle() const;
 
+    // FBX Preivew World 관리
+    UWorld* EnsureFBXPreviewWorld();
+    UWorld* ResetFBXPreviewWorld();
+    UWorld* GetFBXPreviewWorld() const;
+    FName GetFBXPreviewWorldHandle() const;
+
+    FFBXPreviewViewportClient& GetFBXPreviewViewportClient() { return FBXPreviewViewport; }
+    const FFBXPreviewViewportClient& GetFBXPreviewViewportClient() const { return FBXPreviewViewport; }
+
 private:
     FSelectionManager SelectionManager;
     FEditorMainPanel  MainPanel;
+
     FEditorViewportLayout   ViewportLayout;
+    FFBXPreviewViewportClient FBXPreviewViewport;
+
     TMap<int32, FName> ViewportPIEHandles;  // 뷰포트 인덱스 → PIE 월드 컨텍스트 핸들
 };

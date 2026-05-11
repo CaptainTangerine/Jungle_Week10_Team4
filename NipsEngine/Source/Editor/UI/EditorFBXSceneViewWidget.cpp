@@ -5,11 +5,14 @@
 #include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
+#include "Editor/EditorEngine.h"
+#include "Editor/EditorRenderPipeline.h"
+#include "Editor/Viewport/FBXPreviewViewportClient.h"
+#include "Engine/Slate/SlateUtils.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
 #include "ImGui/imgui.h"
 #include "Object/Object.h"
-#include "Runtime/Engine.h"
 
 #include <commdlg.h>
 #include <filesystem>
@@ -186,13 +189,14 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 
     SelectedNodeIndex = 0;
     StatusMessage = "FBX import scene loaded.";
+    SpawnImportedFBXMeshActors();
 }
 
 void FEditorFBXSceneViewWidget::Render(float DeltaTime)
 {
     (void)DeltaTime;
 
-    ImGui::SetNextWindowSize(ImVec2(760.0f, 520.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(1100.0f, 650.0f), ImGuiCond_Once);
     if (!ImGui::Begin("FBX Scene Viewer"))
     {
         ImGui::End();
@@ -201,22 +205,109 @@ void FEditorFBXSceneViewWidget::Render(float DeltaTime)
 
     RenderToolbar();
     ImGui::Separator();
-    RenderSummary();
-    ImGui::Separator();
 
-    const float DetailsWidth = 300.0f;
-    const float TreeWidth = ImGui::GetContentRegionAvail().x - DetailsWidth - ImGui::GetStyle().ItemSpacing.x;
-    ImGui::BeginChild("##FBXTreePanel", ImVec2(TreeWidth > 240.0f ? TreeWidth : 240.0f, 0), true);
-    RenderTree();
+    const float SidePanelWidth = 320.0f;
+    const float ViewportWidth  = ImGui::GetContentRegionAvail().x - SidePanelWidth - ImGui::GetStyle().ItemSpacing.x;
+
+    // 왼쪽: 3D 뷰포트
+    ImGui::BeginChild("##FBXViewport", ImVec2(ViewportWidth > 100.0f ? ViewportWidth : 100.0f, 0), false);
+    RenderViewport();
     ImGui::EndChild();
 
     ImGui::SameLine();
+
+    // 오른쪽: Summary + Tree + Details
+    ImGui::BeginChild("##FBXSidePanel", ImVec2(0, 0), false);
+
+    RenderSummary();
+    ImGui::Separator();
+
+    const float HalfHeight = ImGui::GetContentRegionAvail().y * 0.5f;
+    ImGui::BeginChild("##FBXTreePanel", ImVec2(0, HalfHeight), true);
+    RenderTree();
+    ImGui::EndChild();
+
+    ImGui::Separator();
 
     ImGui::BeginChild("##FBXDetailsPanel", ImVec2(0, 0), true);
     RenderDetails();
     ImGui::EndChild();
 
+    ImGui::EndChild();
+
     ImGui::End();
+}
+
+void FEditorFBXSceneViewWidget::RenderViewport()
+{
+    if (!EditorEngine) { return; }
+
+    // 이 Child 창의 실제 픽셀 크기를 다음 프레임 렌더 해상도로 예약
+    const ImVec2 AvailSize = ImGui::GetContentRegionAvail();
+    const int32 W = static_cast<int32>(AvailSize.x);
+    const int32 H = static_cast<int32>(AvailSize.y);
+
+    FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
+    FBXClient.SetViewportRect(W, H);
+
+    // 렌더 파이프라인에서 이번 프레임에 렌더된 SRV를 가져와 표시
+    const FEditorRenderPipeline* Pipeline = EditorEngine->GetEditorRenderPipeline();
+    ID3D11ShaderResourceView* SRV = Pipeline ? Pipeline->GetFBXPreviewSRV() : nullptr;
+
+    if (SRV)
+    {
+        const ImVec2 ImagePos = ImGui::GetCursorScreenPos();
+        ImGui::Image(reinterpret_cast<ImTextureID>(SRV), AvailSize);
+
+        // 뷰포트 이미지에 마우스가 올라왔을 때 입력 전달
+        if (ImGui::IsItemHovered())
+        {
+            ImGuiIO& IO = ImGui::GetIO();
+
+            FViewportMouseEvent Ev;
+            Ev.LocalX      = static_cast<int32>(IO.MousePos.x - ImagePos.x);
+            Ev.LocalY      = static_cast<int32>(IO.MousePos.y - ImagePos.y);
+            Ev.bLeftDown   = IO.MouseDown[0];
+            Ev.bRightDown  = IO.MouseDown[1];
+            Ev.bMiddleDown = IO.MouseDown[2];
+
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+            {
+                FBXClient.OnMouseButtonDown(Ev);
+            }
+
+            if (IO.MouseDelta.x != 0.0f || IO.MouseDelta.y != 0.0f)
+            {
+                FBXClient.OnMouseMove(Ev);
+            }
+
+            if (IO.MouseWheel != 0.0f)
+            {
+                FBXClient.OnMouseWheel(IO.MouseWheel);
+            }
+        }
+
+        // 드래그 중에는 뷰포트 밖으로 나가도 입력 유지
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        {
+            ImGuiIO& IO = ImGui::GetIO();
+            FViewportMouseEvent Ev;
+            Ev.LocalX      = static_cast<int32>(IO.MousePos.x - ImagePos.x);
+            Ev.LocalY      = static_cast<int32>(IO.MousePos.y - ImagePos.y);
+            Ev.bLeftDown   = IO.MouseDown[0];
+            Ev.bRightDown  = IO.MouseDown[1];
+            FBXClient.OnMouseButtonUp(Ev);
+        }
+    }
+    else
+    {
+        // SRV가 아직 없으면 안내 텍스트 표시
+        const ImVec2 TextSize = ImGui::CalcTextSize("Open an FBX file to preview.");
+        ImGui::SetCursorPos(ImVec2(
+            (AvailSize.x - TextSize.x) * 0.5f,
+            (AvailSize.y - TextSize.y) * 0.5f));
+        ImGui::TextDisabled("Open an FBX file to preview.");
+    }
 }
 
 void FEditorFBXSceneViewWidget::RenderToolbar()
@@ -236,6 +327,10 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         ImportScene = FFBXImportScene{};
         LoadedFilePath.clear();
         SelectedNodeIndex = -1;
+        if (EditorEngine)
+        {
+            EditorEngine->ResetFBXPreviewWorld();
+        }
         StatusMessage = "No FBX loaded.";
     }
 
@@ -243,22 +338,6 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
     if (ImGui::Checkbox("Skinned -> Static", &bImportSkinnedMeshesAsStatic) && !LoadedFilePath.empty())
     {
         LoadFBXScene(LoadedFilePath);
-    }
-
-    ImGui::SameLine();
-
-    const bool bHasMeshes = !ImportScene.StaticMeshes.empty() || !ImportScene.SkeletalMeshes.empty();
-    if (!bHasMeshes)
-    {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("Spawn Actors"))
-    {
-        SpawnImportedFBXMeshActors();
-    }
-    if (!bHasMeshes)
-    {
-        ImGui::EndDisabled();
     }
 }
 
@@ -402,10 +481,10 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         return;
     }
 
-    UWorld* World = GEngine ? GEngine->GetWorld() : nullptr;
+    UWorld* World = EditorEngine ? EditorEngine->ResetFBXPreviewWorld() : nullptr;
     if (World == nullptr)
     {
-        StatusMessage = "World가 null입니다. FBX Actor 스폰 실패.";
+        StatusMessage = "FBX Preview World가 null입니다. FBX Actor 스폰 실패.";
         return;
     }
 
@@ -501,6 +580,10 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 
     // 공간 쿼리 인덱스 갱신 (새 컴포넌트의 AABB가 반영되어야 컬링/쿼리가 정상 동작)
     World->RebuildSpatialIndex();
+    if (!World->HasBegunPlay())
+    {
+        World->BeginPlay();
+    }
 
     const int32 TotalSpawned = StaticSpawnedCount + SkeletalSpawnedCount;
     if (TotalSpawned > 0)

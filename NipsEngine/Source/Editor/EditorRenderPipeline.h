@@ -18,6 +18,8 @@ public:
     const FRenderCollector::FDecalStats& GetViewportDecalStats(int32 ViewportIndex) const;
     const FRenderCollector::FShadowStats& GetViewportShadowStats(int32 ViewportIndex) const;
 
+    ID3D11ShaderResourceView* GetFBXPreviewSRV() const { return FBXPreviewSRV; }
+
 private:
     /*
      * 단일 뷰포트 렌더 헬퍼.
@@ -26,6 +28,9 @@ private:
      */
     void RenderViewport(FRenderer& Renderer, int32 ViewportIndex);
     bool PrepareViewport(FRenderer& Renderer, int32 ViewportIndex, FSceneView& OutSceneView, FEditorViewportClient*& OutViewportClient);
+    void RenderFBXPreview(FRenderer& Renderer);
+
+    static constexpr int32 FBXPreviewResourceIndex = 4;
 
     UEditorEngine* Editor = nullptr;
     FRenderCollector Collector;
@@ -33,4 +38,6 @@ private:
     TArray<FRenderCollector::FCullingStats> ViewportCullingStats;
     TArray<FRenderCollector::FDecalStats> ViewportDecalStats;
     TArray<FRenderCollector::FShadowStats> ViewportShadowStats;
+
+    ID3D11ShaderResourceView* FBXPreviewSRV = nullptr;
 };

@@ -222,7 +222,7 @@ private:
     // Directional, Ambient 같은 전역 Light 개수 제한
     constexpr static uint32 MaxSceneGlobalLightCount = 64;
 
-    // 지금은 4개 Viewport 고정 존재 상황이라 다음과 같이 처리
-    FViewportRenderResource ViewportResources[4];
+    // 인덱스 0-3: 에디터 뷰포트, 인덱스 4: FBX Preview 전용
+    FViewportRenderResource ViewportResources[5];
 };
 

@@ -9,7 +9,7 @@ enum class EWorldType : uint32
 {
     Editor,          // Editor mode — no BeginPlay
     PIE,             // Play In Editor
-    EditorPriview,   // Editor Preview mode - BeginPlay/Tick active
+    EditorPeiview,   // Editor Preview mode - BeginPlay/Tick active
     ViewerPreview,   // Object Viewer mode - BeginPlay/Tick active (to check animation)
     Game,		     // Game mode — BeginPlay/Tick active
 };

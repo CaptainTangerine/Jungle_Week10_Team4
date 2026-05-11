@@ -13,6 +13,7 @@ private:
     bool OpenFBXFileDialog(FString& OutFilePath) const;
     void LoadFBXScene(const FString& FilePath);
     void RenderToolbar();
+    void RenderViewport();
     void RenderSummary() const;
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);

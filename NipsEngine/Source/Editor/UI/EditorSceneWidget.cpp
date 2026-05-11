@@ -129,6 +129,7 @@ void FEditorSceneWidget::LoadSceneFromFilePath(const FString& FilePath)
         EditorEngine->SetActiveWorld(LoadCtx.ContextHandle);
         EditorEngine->ApplySpatialIndexMaintenanceSettings(LoadCtx.World);
     }
+    EditorEngine->EnsureFBXPreviewWorld();
     EditorEngine->ResetViewport();
 
     // ResetViewport 가 카메라를 InitViewPos 로 초기화하므로 그 이후에 덮어씁니다

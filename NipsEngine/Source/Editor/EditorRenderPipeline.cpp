@@ -1,6 +1,7 @@
 ﻿#include "EditorRenderPipeline.h"
 
 #include "Editor/EditorEngine.h"
+#include "Editor/Viewport/FBXPreviewViewportClient.h"
 #include "Render/Renderer/Renderer.h"
 #include "Core/Logging/Stats.h"
 #include "Core/Logging/GPUProfiler.h"
@@ -36,6 +37,8 @@ void FEditorRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
     {
         RenderViewport(Renderer, i);
     }
+
+    RenderFBXPreview(Renderer);
 
     Renderer.UseBackBufferRenderTargets();
 
@@ -168,4 +171,51 @@ const FRenderCollector::FShadowStats& FEditorRenderPipeline::GetViewportShadowSt
     }
 
     return ViewportShadowStats[ViewportIndex];
+}
+
+void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
+{
+    FBXPreviewSRV = nullptr;
+
+    FFBXPreviewViewportClient& FBXClient = Editor->GetFBXPreviewViewportClient();
+    UWorld* FBXWorld = FBXClient.GetWorld();
+    if (!FBXWorld) { return; }
+
+    FSceneView SceneView;
+    FBXClient.BuildSceneView(SceneView);
+
+    const FViewportRect& Rect = SceneView.ViewRect;
+    if (Rect.Width <= 0 || Rect.Height <= 0) { return; }
+
+    FViewportRenderResource& Resource = Renderer.AcquireViewportResource(
+        static_cast<uint32>(Rect.Width),
+        static_cast<uint32>(Rect.Height),
+        FBXPreviewResourceIndex);
+
+    FRenderTargetSet& RTS = Resource.GetView();
+    Renderer.BeginViewportFrame(&RTS);
+
+    FShowFlags FBXShowFlags;
+    FBXShowFlags.bGrid   = false;
+    FBXShowFlags.bAxis   = false;
+    FBXShowFlags.bGizmo  = false;
+
+    Bus.Clear();
+    Bus.SetViewProjection(SceneView.ViewMatrix, SceneView.ProjectionMatrix);
+    Bus.SetCameraPlane(SceneView.NearPlane, SceneView.FarPlane);
+    Bus.SetRenderSettings(SceneView.ViewMode, FBXShowFlags);
+    Bus.SetViewportSize(FVector2(static_cast<float>(Rect.Width), static_cast<float>(Rect.Height)));
+    Bus.SetViewportOrigin(FVector2(0.0f, 0.0f));
+    Bus.SetFXAAEnabled(false);
+
+    Renderer.GetDebugLineBatcher().Clear();
+    Renderer.GetDebugRingBatcher().Clear();
+    Collector.SetLineBatcher(&Renderer.GetDebugLineBatcher());
+    Collector.SetRingBatcher(&Renderer.GetDebugRingBatcher());
+    Collector.CollectWorld(FBXWorld, FBXShowFlags, SceneView.ViewMode, Bus, &SceneView.CameraFrustum);
+
+    Renderer.PrepareBatchers(Bus);
+    Renderer.Render(Bus);
+
+    FBXPreviewSRV = Resource.ColorSRV.Get();
 }
