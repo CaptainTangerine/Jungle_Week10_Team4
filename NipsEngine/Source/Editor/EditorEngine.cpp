@@ -97,6 +97,7 @@ void UEditorEngine::Tick(float DeltaTime)
         }
     }
     ViewportLayout.Tick(DeltaTime);
+    FBXPreviewViewport.Tick(DeltaTime);
     MainPanel.Update();
     WorldTick(DeltaTime);
     Render(DeltaTime);
