@@ -2,6 +2,8 @@
 
 #include "Asset/BinarySerializer.h"
 #include "Asset/FileUtils.h"
+#include "Asset/FBX/FBXImporter.h"
+#include "Asset/SkeletalMesh.h"
 #include "Asset/StaticMeshSimplifier.h"
 #include "Asset/StaticMeshTypes.h"
 #include "Core/Paths.h"
@@ -458,6 +460,47 @@ bool FResourceManager::IsStaticMeshBinaryValid(const FString& SourcePath, const 
     return Header.SourceFileWriteTime == SourceWriteTime;
 }
 
+FString FResourceManager::MakeSkeletalMeshBinaryPath(const FString& SourcePath, int32 MeshIndex) const
+{
+    namespace fs = std::filesystem;
+
+    fs::path SourceFsPath(FPaths::ToWide(SourcePath));
+    fs::path BinDir = fs::path(FPaths::RootDir()) / "Asset" / "Mesh" / "Bin";
+
+    if (!fs::exists(BinDir))
+    {
+        fs::create_directories(BinDir);
+    }
+
+    fs::path BinaryFileName = SourceFsPath.stem();
+    if (MeshIndex > 0)
+    {
+        BinaryFileName += "_skel";
+        BinaryFileName += std::to_string(MeshIndex);
+    }
+    BinaryFileName += ".skmesh";
+
+    fs::path BinaryPath = BinDir / BinaryFileName;
+    return FPaths::ToString(BinaryPath.wstring());
+}
+
+bool FResourceManager::IsSkeletalMeshBinaryValid(const FString& SourcePath, const FString& BinaryPath) const
+{
+    FSkeletalMeshBinaryHeader Header;
+    if (!BinarySerializer.ReadSkeletalMeshHeader(BinaryPath, Header))
+    {
+        return false;
+    }
+
+    const uint64 SourceWriteTime = GetFileWriteTimeTicks(SourcePath);
+    if (SourceWriteTime == 0)
+    {
+        return false;
+    }
+
+    return Header.SourceFileWriteTime == SourceWriteTime;
+}
+
 void FResourceManager::PreloadStaticMeshes()
 {
     for (const auto& [Key, Resource] : StaticMeshRegistry)
@@ -645,7 +688,7 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
             const fs::path& FilePath = Entry.path();
             const FWString Extension = FilePath.extension().wstring();
 
-            if (Extension == L".meta" || Extension == L".bin")
+            if (Extension == L".meta" || Extension == L".bin" || Extension == L".skmesh")
             {
                 continue;
             }
@@ -739,7 +782,7 @@ void FResourceManager::DeleteAllCacheFiles()
         }
 
         const fs::path& FilePath = Entry.path();
-        if (FilePath.extension() == L".bin")
+        if (FilePath.extension() == L".bin" || FilePath.extension() == L".skmesh")
         {
             std::error_code Ec;
             fs::remove(FilePath, Ec);
@@ -1072,6 +1115,11 @@ void FResourceManager::ReleaseGPUResources()
         UObjectManager::Get().DestroyObject(StaticMeshAsset);
     }
     StaticMeshes.clear();
+    for (auto& [Path, SkeletalMeshAsset] : SkeletalMeshes)
+    {
+        UObjectManager::Get().DestroyObject(SkeletalMeshAsset);
+    }
+    SkeletalMeshes.clear();
     StaticMeshRegistry.clear();
 
     // D3D state object caches
@@ -2691,6 +2739,114 @@ UStaticMesh* FResourceManager::FindStaticMesh(const FString& Path) const
 {
     auto It = StaticMeshes.find(Path);
     if (It == StaticMeshes.end())
+    {
+        return nullptr;
+    }
+
+    return It->second;
+}
+
+USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 MeshIndex)
+{
+    const std::filesystem::path InputPath(FPaths::ToWide(Path));
+    const bool bBinaryPath = InputPath.extension() == L".skmesh";
+    const FString CacheKey = bBinaryPath
+        ? Path
+        : (MeshIndex == 0 ? Path : (Path + "|skel" + std::to_string(MeshIndex)));
+
+    if (USkeletalMesh* FoundMesh = FindSkeletalMesh(CacheKey))
+    {
+        return FoundMesh;
+    }
+
+    const FString BinaryPath = bBinaryPath ? Path : MakeSkeletalMeshBinaryPath(Path, MeshIndex);
+
+    FSkeletalMesh* LoadedMeshData = nullptr;
+    double BinaryLoadSec = 0.0;
+    double FbxLoadSec = 0.0;
+
+    if (bBinaryPath || IsSkeletalMeshBinaryValid(Path, BinaryPath))
+    {
+        const auto BinaryStart = std::chrono::steady_clock::now();
+
+        LoadedMeshData = new FSkeletalMesh();
+        if (!BinarySerializer.LoadSkeletalMesh(BinaryPath, *LoadedMeshData))
+        {
+            delete LoadedMeshData;
+            LoadedMeshData = nullptr;
+        }
+
+        const auto BinaryEnd = std::chrono::steady_clock::now();
+        BinaryLoadSec = std::chrono::duration<double>(BinaryEnd - BinaryStart).count();
+    }
+
+    if (LoadedMeshData == nullptr && !bBinaryPath)
+    {
+        const auto FbxStart = std::chrono::steady_clock::now();
+
+        FFBXImporter Importer;
+        FFBXImportScene ImportScene = Importer.Import(Path);
+        if (MeshIndex >= 0 && MeshIndex < static_cast<int32>(ImportScene.SkeletalMeshes.size()))
+        {
+            LoadedMeshData = Importer.CreateSkeletalMeshFromtImportData(ImportScene.SkeletalMeshes[MeshIndex]);
+            if (LoadedMeshData != nullptr)
+            {
+                LoadedMeshData->SkeletonAssetPath = Path;
+            }
+        }
+
+        const auto FbxEnd = std::chrono::steady_clock::now();
+        FbxLoadSec = std::chrono::duration<double>(FbxEnd - FbxStart).count();
+
+        if (LoadedMeshData == nullptr)
+        {
+            UE_LOG("[SkeletalMeshLoad] Failed | Path=%s | BinarySec=%.6f | FbxSec=%.6f", Path.c_str(), BinaryLoadSec, FbxLoadSec);
+            return nullptr;
+        }
+
+        const bool bSaveBinaryOk = BinarySerializer.SaveSkeletalMesh(BinaryPath, Path, *LoadedMeshData);
+        UE_LOG(
+            "[SkeletalMeshLoad] Source=FBX | Path=%s | FbxSec=%.6f | BinarySave=%s | BinaryPath=%s",
+            Path.c_str(),
+            FbxLoadSec,
+            bSaveBinaryOk ? "OK" : "FAIL",
+            BinaryPath.c_str());
+    }
+    else if (LoadedMeshData != nullptr)
+    {
+        UE_LOG(
+            "[SkeletalMeshLoad] Source=Binary | Path=%s | BinarySec=%.6f | BinaryPath=%s",
+            Path.c_str(),
+            BinaryLoadSec,
+            BinaryPath.c_str());
+    }
+
+    if (LoadedMeshData == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (FSkeletalMeshMaterialSlot& Slot : LoadedMeshData->Slots)
+    {
+        Slot.Material = GetMaterial(Slot.SlotName);
+
+        if (Slot.Material == nullptr)
+        {
+            Slot.Material = GetMaterial("DefaultWhite");
+        }
+    }
+
+    USkeletalMesh* LoadedMesh = UObjectManager::Get().CreateObject<USkeletalMesh>();
+    LoadedMesh->SetMeshData(LoadedMeshData);
+    SkeletalMeshes.insert({ CacheKey, LoadedMesh });
+
+    return LoadedMesh;
+}
+
+USkeletalMesh* FResourceManager::FindSkeletalMesh(const FString& Path) const
+{
+    auto It = SkeletalMeshes.find(Path);
+    if (It == SkeletalMeshes.end())
     {
         return nullptr;
     }

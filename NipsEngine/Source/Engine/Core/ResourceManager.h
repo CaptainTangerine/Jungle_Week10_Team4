@@ -4,6 +4,7 @@
 #include "Asset/FontAtlasLoader.h"
 #include "Asset/ObjLoader.h"
 #include "Asset/ParticleAtlasLoader.h"
+#include "Asset/SkeletalMesh.h"
 #include "Asset/StaticMesh.h"
 #include "Core/Containers/Set.h"
 #include "Core/CoreTypes.h"
@@ -147,6 +148,9 @@ public:
     UStaticMesh* FindStaticMesh(const FString& Path) const;
     TArray<FString> GetStaticMeshPaths() const;
 
+    USkeletalMesh* LoadSkeletalMesh(const FString& Path, int32 MeshIndex = 0);
+    USkeletalMesh* FindSkeletalMesh(const FString& Path) const;
+
     ID3D11SamplerState* GetOrCreateSamplerState(ESamplerType Type, ID3D11Device* Device = nullptr);
     ID3D11DepthStencilState* GetOrCreateDepthStencilState(EDepthStencilType Type, ID3D11Device* Device = nullptr);
     ID3D11BlendState* GetOrCreateBlendState(EBlendType Type, ID3D11Device* Device = nullptr);
@@ -161,6 +165,8 @@ private:
     uint64 GetFileWriteTimeTicks(const FString& Path) const;
     FString MakeStaticMeshBinaryPath(const FString& SourcePath, bool bNormalized = false) const;
     bool IsStaticMeshBinaryValid(const FString& SourcePath, const FString& BinaryPath) const;
+    FString MakeSkeletalMeshBinaryPath(const FString& SourcePath, int32 MeshIndex = 0) const;
+    bool IsSkeletalMeshBinaryValid(const FString& SourcePath, const FString& BinaryPath) const;
     void PreloadStaticMeshes();
     UStaticMesh* LoadStaticMeshWithOptions(const FString& Path, const FStaticMeshLoadOptions& LoadOptions);
     bool LoadShaderInternal(const FShaderCompileKey& CompileKey,
@@ -217,6 +223,7 @@ private:
     TComPtr<ID3D11Texture2D>          DefaultNormalTexture;
 
     TMap<FString, UStaticMesh*> StaticMeshes;
+    TMap<FString, USkeletalMesh*> SkeletalMeshes;
     TMap<FString, UShader*> Shaders;
     TMap<FShaderCompileKey, UShader*> ShaderVariants;
 

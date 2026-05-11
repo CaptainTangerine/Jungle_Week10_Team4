@@ -1,5 +1,6 @@
 ﻿#include "BinarySerializer.h"
 
+#include "Asset/SkeletalMeshTypes.h"
 #include "Asset/StaticMeshTypes.h"
 #include "Core/Paths.h"
 
@@ -34,13 +35,21 @@
 /* Validation Check Constants */
 constexpr uint32 STATIC_MESH_BINARY_MAGIC = 0x4853454D; // 'MESH'
 constexpr uint32 STATIC_MESH_BINARY_VERSION = 2;
+constexpr uint32 SKELETAL_MESH_BINARY_MAGIC = 0x484D4B53; // 'SKMH'
+constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 1;
 
 //	Vailidation Checkers
 constexpr uint32 MAX_STATIC_MESH_VERTEX_COUNT   = 10'000'000;
 constexpr uint32 MAX_STATIC_MESH_INDEX_COUNT    = 30'000'000;
 constexpr uint32 MAX_STATIC_MESH_SECTION_COUNT  = 100'000;
 constexpr uint32 MAX_STATIC_MESH_SLOTNAME_COUNT = 1024;
+constexpr uint32 MAX_SKELETAL_MESH_VERTEX_COUNT   = 10'000'000;
+constexpr uint32 MAX_SKELETAL_MESH_INDEX_COUNT    = 30'000'000;
+constexpr uint32 MAX_SKELETAL_MESH_SECTION_COUNT  = 100'000;
+constexpr uint32 MAX_SKELETAL_MESH_SLOTNAME_COUNT = 1024;
+constexpr uint32 MAX_SKELETAL_MESH_BONE_COUNT     = 100'000;
 constexpr uint32 MAX_STRING_LENGTH              = 4096;
+constexpr uint64 SKELETAL_MESH_BINARY_HEADER_SIZE = 60;
 
 static bool IsValidStaticMeshHeader(const FStaticMeshBinaryHeader& Header)
 {
@@ -75,6 +84,59 @@ static bool IsValidStaticMeshHeader(const FStaticMeshBinaryHeader& Header)
     }
 
     return true;
+}
+
+static bool IsValidSkeletalMeshHeader(const FSkeletalMeshBinaryHeader& Header)
+{
+    if (Header.MagicNumber != SKELETAL_MESH_BINARY_MAGIC)
+    {
+        return false;
+    }
+
+    if (Header.Version != SKELETAL_MESH_BINARY_VERSION)
+    {
+        return false;
+    }
+
+    if (Header.VertexCount > MAX_SKELETAL_MESH_VERTEX_COUNT)
+    {
+        return false;
+    }
+
+    if (Header.IndexCount > MAX_SKELETAL_MESH_INDEX_COUNT)
+    {
+        return false;
+    }
+
+    if (Header.SectionCount > MAX_SKELETAL_MESH_SECTION_COUNT)
+    {
+        return false;
+    }
+
+    if (Header.SlotCount > MAX_SKELETAL_MESH_SLOTNAME_COUNT)
+    {
+        return false;
+    }
+
+    if (Header.BoneCount > MAX_SKELETAL_MESH_BONE_COUNT)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static bool HasValidSkeletalMeshChunkOffsets(const FSkeletalMeshBinaryHeader& Header)
+{
+    return Header.DependencyChunkOffset >= SKELETAL_MESH_BINARY_HEADER_SIZE
+        && Header.StaticGeometryChunkOffset > Header.DependencyChunkOffset
+        && Header.CPUSkinningChunkOffset > Header.StaticGeometryChunkOffset;
+}
+
+static bool SeekToBinaryOffset(std::ifstream& In, uint64 Offset)
+{
+    In.seekg(static_cast<std::streamoff>(Offset), std::ios::beg);
+    return In.good();
 }
 
 /* Time Checker */
@@ -231,6 +293,36 @@ bool FBinarySerializer::ReadHeader(std::ifstream& In, FStaticMeshBinaryHeader& O
         && ReadUInt32LE(In, OutHeader.SectionCount)
         && ReadUInt32LE(In, OutHeader.SlotCount)
         && ReadUInt64LE(In, OutHeader.SourceFileWriteTime);
+}
+
+void FBinarySerializer::WriteHeader(std::ofstream& Out, const FSkeletalMeshBinaryHeader& Header)
+{
+    WriteUInt32LE(Out, Header.MagicNumber);
+    WriteUInt32LE(Out, Header.Version);
+    WriteUInt32LE(Out, Header.VertexCount);
+    WriteUInt32LE(Out, Header.IndexCount);
+    WriteUInt32LE(Out, Header.SectionCount);
+    WriteUInt32LE(Out, Header.SlotCount);
+    WriteUInt32LE(Out, Header.BoneCount);
+    WriteUInt64LE(Out, Header.SourceFileWriteTime);
+    WriteUInt64LE(Out, Header.DependencyChunkOffset);
+    WriteUInt64LE(Out, Header.StaticGeometryChunkOffset);
+    WriteUInt64LE(Out, Header.CPUSkinningChunkOffset);
+}
+
+bool FBinarySerializer::ReadHeader(std::ifstream& In, FSkeletalMeshBinaryHeader& OutHeader) const
+{
+    return ReadUInt32LE(In, OutHeader.MagicNumber)
+        && ReadUInt32LE(In, OutHeader.Version)
+        && ReadUInt32LE(In, OutHeader.VertexCount)
+        && ReadUInt32LE(In, OutHeader.IndexCount)
+        && ReadUInt32LE(In, OutHeader.SectionCount)
+        && ReadUInt32LE(In, OutHeader.SlotCount)
+        && ReadUInt32LE(In, OutHeader.BoneCount)
+        && ReadUInt64LE(In, OutHeader.SourceFileWriteTime)
+        && ReadUInt64LE(In, OutHeader.DependencyChunkOffset)
+        && ReadUInt64LE(In, OutHeader.StaticGeometryChunkOffset)
+        && ReadUInt64LE(In, OutHeader.CPUSkinningChunkOffset);
 }
 
 void FBinarySerializer::WriteString(std::ofstream& Out, const FString& String)
@@ -497,6 +589,384 @@ bool FBinarySerializer::ReadBounds(std::ifstream& In, FStaticMesh& OutData) cons
         && ReadFloatLE(In, OutData.LocalBounds.Max.Z);
 }
 
+void FBinarySerializer::WriteMatrix(std::ofstream& Out, const FMatrix& Matrix)
+{
+    for (int32 Row = 0; Row < 4; ++Row)
+    {
+        for (int32 Col = 0; Col < 4; ++Col)
+        {
+            WriteFloatLE(Out, Matrix.M[Row][Col]);
+        }
+    }
+}
+
+bool FBinarySerializer::ReadMatrix(std::ifstream& In, FMatrix& OutMatrix) const
+{
+    for (int32 Row = 0; Row < 4; ++Row)
+    {
+        for (int32 Col = 0; Col < 4; ++Col)
+        {
+            if (!ReadFloatLE(In, OutMatrix.M[Row][Col]))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void FBinarySerializer::WriteSkeletalDependencyChunk(
+    std::ofstream& Out,
+    const FString& SourcePath,
+    const FSkeletalMesh& Data)
+{
+    const FString& SkeletonAssetPath = Data.SkeletonAssetPath.empty() ? SourcePath : Data.SkeletonAssetPath;
+    WriteString(Out, SkeletonAssetPath);
+    WriteString(Out, Data.FilePathName);
+
+    uint32 BoneCount = static_cast<uint32>(Data.Bones.size());
+    WriteUInt32LE(Out, BoneCount);
+    for (uint32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+    {
+        WriteUInt32LE(Out, BoneIndex);
+        WriteString(Out, Data.Bones[BoneIndex].Name);
+    }
+
+    WriteUInt32LE(Out, BoneCount);
+    for (const FBoneInfo& Bone : Data.Bones)
+    {
+        WriteInt32LE(Out, Bone.ParentIndex);
+        WriteMatrix(Out, Bone.LocalTransform);
+        WriteMatrix(Out, Bone.GlobalTransform);
+        WriteMatrix(Out, Bone.InverseBindTransform);
+    }
+}
+
+bool FBinarySerializer::ReadSkeletalDependencyChunk(
+    std::ifstream& In,
+    FSkeletalMesh& OutData,
+    uint32 BoneCount) const
+{
+    if (!ReadString(In, OutData.SkeletonAssetPath))
+    {
+        return false;
+    }
+
+    if (!ReadString(In, OutData.FilePathName))
+    {
+        return false;
+    }
+
+    uint32 MappingCount = 0;
+    if (!ReadUInt32LE(In, MappingCount))
+    {
+        return false;
+    }
+
+    if (MappingCount != BoneCount || MappingCount > MAX_SKELETAL_MESH_BONE_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    OutData.Bones.clear();
+    OutData.Bones.resize(BoneCount);
+
+    for (uint32 MappingIndex = 0; MappingIndex < MappingCount; ++MappingIndex)
+    {
+        uint32 LocalBoneIndex = 0;
+        FString BoneName;
+        if (!ReadUInt32LE(In, LocalBoneIndex) || !ReadString(In, BoneName))
+        {
+            return false;
+        }
+
+        if (LocalBoneIndex >= BoneCount)
+        {
+            In.setstate(std::ios::failbit);
+            return false;
+        }
+
+        OutData.Bones[LocalBoneIndex].Name = BoneName;
+    }
+
+    uint32 TransformCount = 0;
+    if (!ReadUInt32LE(In, TransformCount))
+    {
+        return false;
+    }
+
+    if (TransformCount != BoneCount)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    for (uint32 BoneIndex = 0; BoneIndex < TransformCount; ++BoneIndex)
+    {
+        FBoneInfo& Bone = OutData.Bones[BoneIndex];
+        if (!ReadInt32LE(In, Bone.ParentIndex) ||
+            !ReadMatrix(In, Bone.LocalTransform) ||
+            !ReadMatrix(In, Bone.GlobalTransform) ||
+            !ReadMatrix(In, Bone.InverseBindTransform))
+        {
+            return false;
+        }
+
+        if (Bone.ParentIndex < -1 || Bone.ParentIndex >= static_cast<int32>(BoneCount))
+        {
+            In.setstate(std::ios::failbit);
+            return false;
+        }
+    }
+
+    return In.good();
+}
+
+void FBinarySerializer::WriteSkeletalStaticGeometryChunk(std::ofstream& Out, const FSkeletalMesh& Data)
+{
+    WriteIndexArray(Out, Data.Indices);
+
+    uint32 SectionCount = static_cast<uint32>(Data.Sections.size());
+    WriteUInt32LE(Out, SectionCount);
+    for (const FSkeletalMeshSection& Section : Data.Sections)
+    {
+        WriteUInt32LE(Out, Section.StartIndex);
+        WriteUInt32LE(Out, Section.IndexCount);
+        WriteInt32LE(Out, Section.MaterialSlotIndex);
+    }
+
+    uint32 SlotCount = static_cast<uint32>(Data.Slots.size());
+    WriteUInt32LE(Out, SlotCount);
+    for (const FSkeletalMeshMaterialSlot& Slot : Data.Slots)
+    {
+        WriteString(Out, Slot.SlotName);
+    }
+
+    uint32 VertexCount = static_cast<uint32>(Data.Vertices.size());
+    WriteUInt32LE(Out, VertexCount);
+    for (const FSkeletalVertex& Vertex : Data.Vertices)
+    {
+        WriteFloatLE(Out, Vertex.Color.R);
+        WriteFloatLE(Out, Vertex.Color.G);
+        WriteFloatLE(Out, Vertex.Color.B);
+        WriteFloatLE(Out, Vertex.Color.A);
+
+        WriteFloatLE(Out, Vertex.UVs.X);
+        WriteFloatLE(Out, Vertex.UVs.Y);
+
+        WriteFloatLE(Out, Vertex.Tangent.X);
+        WriteFloatLE(Out, Vertex.Tangent.Y);
+        WriteFloatLE(Out, Vertex.Tangent.Z);
+
+        WriteFloatLE(Out, Vertex.Bitangent.X);
+        WriteFloatLE(Out, Vertex.Bitangent.Y);
+        WriteFloatLE(Out, Vertex.Bitangent.Z);
+    }
+
+    WriteFloatLE(Out, Data.LocalBounds.Min.X);
+    WriteFloatLE(Out, Data.LocalBounds.Min.Y);
+    WriteFloatLE(Out, Data.LocalBounds.Min.Z);
+    WriteFloatLE(Out, Data.LocalBounds.Max.X);
+    WriteFloatLE(Out, Data.LocalBounds.Max.Y);
+    WriteFloatLE(Out, Data.LocalBounds.Max.Z);
+}
+
+bool FBinarySerializer::ReadSkeletalStaticGeometryChunk(
+    std::ifstream& In,
+    FSkeletalMesh& OutData,
+    uint32 VertexCount,
+    uint32 IndexCount,
+    uint32 SectionCount,
+    uint32 SlotCount) const
+{
+    if (!ReadIndexArray(In, OutData.Indices))
+    {
+        return false;
+    }
+
+    if (OutData.Indices.size() != IndexCount)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    uint32 ReadSectionCount = 0;
+    if (!ReadUInt32LE(In, ReadSectionCount))
+    {
+        return false;
+    }
+
+    if (ReadSectionCount != SectionCount || ReadSectionCount > MAX_SKELETAL_MESH_SECTION_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    OutData.Sections.resize(ReadSectionCount);
+    for (FSkeletalMeshSection& Section : OutData.Sections)
+    {
+        if (!ReadUInt32LE(In, Section.StartIndex) ||
+            !ReadUInt32LE(In, Section.IndexCount) ||
+            !ReadInt32LE(In, Section.MaterialSlotIndex))
+        {
+            return false;
+        }
+    }
+
+    uint32 ReadSlotCount = 0;
+    if (!ReadUInt32LE(In, ReadSlotCount))
+    {
+        return false;
+    }
+
+    if (ReadSlotCount != SlotCount || ReadSlotCount > MAX_SKELETAL_MESH_SLOTNAME_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    OutData.Slots.resize(ReadSlotCount);
+    for (FSkeletalMeshMaterialSlot& Slot : OutData.Slots)
+    {
+        if (!ReadString(In, Slot.SlotName))
+        {
+            return false;
+        }
+    }
+
+    uint32 ReadVertexCount = 0;
+    if (!ReadUInt32LE(In, ReadVertexCount))
+    {
+        return false;
+    }
+
+    if (ReadVertexCount != VertexCount || ReadVertexCount > MAX_SKELETAL_MESH_VERTEX_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    OutData.Vertices.clear();
+    OutData.Vertices.resize(ReadVertexCount);
+    for (FSkeletalVertex& Vertex : OutData.Vertices)
+    {
+        if (!ReadFloatLE(In, Vertex.Color.R) ||
+            !ReadFloatLE(In, Vertex.Color.G) ||
+            !ReadFloatLE(In, Vertex.Color.B) ||
+            !ReadFloatLE(In, Vertex.Color.A) ||
+            !ReadFloatLE(In, Vertex.UVs.X) ||
+            !ReadFloatLE(In, Vertex.UVs.Y) ||
+            !ReadFloatLE(In, Vertex.Tangent.X) ||
+            !ReadFloatLE(In, Vertex.Tangent.Y) ||
+            !ReadFloatLE(In, Vertex.Tangent.Z) ||
+            !ReadFloatLE(In, Vertex.Bitangent.X) ||
+            !ReadFloatLE(In, Vertex.Bitangent.Y) ||
+            !ReadFloatLE(In, Vertex.Bitangent.Z))
+        {
+            return false;
+        }
+    }
+
+    return ReadFloatLE(In, OutData.LocalBounds.Min.X)
+        && ReadFloatLE(In, OutData.LocalBounds.Min.Y)
+        && ReadFloatLE(In, OutData.LocalBounds.Min.Z)
+        && ReadFloatLE(In, OutData.LocalBounds.Max.X)
+        && ReadFloatLE(In, OutData.LocalBounds.Max.Y)
+        && ReadFloatLE(In, OutData.LocalBounds.Max.Z);
+}
+
+void FBinarySerializer::WriteSkeletalCPUSkinningChunk(std::ofstream& Out, const FSkeletalMesh& Data)
+{
+    uint32 VertexCount = static_cast<uint32>(Data.Vertices.size());
+    WriteUInt32LE(Out, VertexCount);
+    for (const FSkeletalVertex& Vertex : Data.Vertices)
+    {
+        WriteFloatLE(Out, Vertex.Position.X);
+        WriteFloatLE(Out, Vertex.Position.Y);
+        WriteFloatLE(Out, Vertex.Position.Z);
+
+        WriteFloatLE(Out, Vertex.Normal.X);
+        WriteFloatLE(Out, Vertex.Normal.Y);
+        WriteFloatLE(Out, Vertex.Normal.Z);
+
+        for (uint32 BlendIndex = 0; BlendIndex < 4; ++BlendIndex)
+        {
+            WriteUInt32LE(Out, Vertex.BoneIndices[BlendIndex]);
+        }
+
+        for (uint32 BlendIndex = 0; BlendIndex < 4; ++BlendIndex)
+        {
+            WriteFloatLE(Out, Vertex.BoneWeights[BlendIndex]);
+        }
+    }
+}
+
+bool FBinarySerializer::ReadSkeletalCPUSkinningChunk(
+    std::ifstream& In,
+    FSkeletalMesh& OutData,
+    uint32 VertexCount,
+    uint32 BoneCount) const
+{
+    uint32 ReadVertexCount = 0;
+    if (!ReadUInt32LE(In, ReadVertexCount))
+    {
+        return false;
+    }
+
+    if (ReadVertexCount != VertexCount || ReadVertexCount > MAX_SKELETAL_MESH_VERTEX_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    if (OutData.Vertices.size() != ReadVertexCount)
+    {
+        OutData.Vertices.resize(ReadVertexCount);
+    }
+
+    for (FSkeletalVertex& Vertex : OutData.Vertices)
+    {
+        if (!ReadFloatLE(In, Vertex.Position.X) ||
+            !ReadFloatLE(In, Vertex.Position.Y) ||
+            !ReadFloatLE(In, Vertex.Position.Z) ||
+            !ReadFloatLE(In, Vertex.Normal.X) ||
+            !ReadFloatLE(In, Vertex.Normal.Y) ||
+            !ReadFloatLE(In, Vertex.Normal.Z))
+        {
+            return false;
+        }
+
+        for (uint32 BlendIndex = 0; BlendIndex < 4; ++BlendIndex)
+        {
+            if (!ReadUInt32LE(In, Vertex.BoneIndices[BlendIndex]))
+            {
+                return false;
+            }
+        }
+
+        for (uint32 BlendIndex = 0; BlendIndex < 4; ++BlendIndex)
+        {
+            if (!ReadFloatLE(In, Vertex.BoneWeights[BlendIndex]))
+            {
+                return false;
+            }
+        }
+
+        for (uint32 BlendIndex = 0; BlendIndex < 4; ++BlendIndex)
+        {
+            if (Vertex.BoneWeights[BlendIndex] > 0.0f && Vertex.BoneIndices[BlendIndex] >= BoneCount)
+            {
+                In.setstate(std::ios::failbit);
+                return false;
+            }
+        }
+    }
+
+    return In.good();
+}
+
 //	보내는 순서와 읽는 순서는 동일 (Header + Body 순서를 고정 -> protocol의 정의)
 bool FBinarySerializer::SaveStaticMesh(const FString& BinaryPath, const FString& SourcePath, const FStaticMesh& Data)
 {
@@ -636,6 +1106,137 @@ bool FBinarySerializer::ReadStaticMeshHeader(const FString& BinaryPath, FStaticM
     }
 
     if (!IsValidStaticMeshHeader(OutHeader))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool FBinarySerializer::SaveSkeletalMesh(
+    const FString& BinaryPath,
+    const FString& SourcePath,
+    const FSkeletalMesh& Data)
+{
+    std::ofstream Out(BinaryPath, std::ios::binary);
+    if (!Out.is_open())
+    {
+        return false;
+    }
+
+    FSkeletalMeshBinaryHeader Header;
+    Header.MagicNumber = SKELETAL_MESH_BINARY_MAGIC;
+    Header.Version = SKELETAL_MESH_BINARY_VERSION;
+    Header.VertexCount = static_cast<uint32>(Data.Vertices.size());
+    Header.IndexCount = static_cast<uint32>(Data.Indices.size());
+    Header.SectionCount = static_cast<uint32>(Data.Sections.size());
+    Header.SlotCount = static_cast<uint32>(Data.Slots.size());
+    Header.BoneCount = static_cast<uint32>(Data.Bones.size());
+    Header.SourceFileWriteTime = GetFileWriteTimeTicks(SourcePath);
+
+    if (!IsValidSkeletalMeshHeader(Header))
+    {
+        return false;
+    }
+
+    WriteHeader(Out, Header);
+
+    Header.DependencyChunkOffset = static_cast<uint64>(static_cast<std::streamoff>(Out.tellp()));
+    WriteSkeletalDependencyChunk(Out, SourcePath, Data);
+
+    Header.StaticGeometryChunkOffset = static_cast<uint64>(static_cast<std::streamoff>(Out.tellp()));
+    WriteSkeletalStaticGeometryChunk(Out, Data);
+
+    Header.CPUSkinningChunkOffset = static_cast<uint64>(static_cast<std::streamoff>(Out.tellp()));
+    WriteSkeletalCPUSkinningChunk(Out, Data);
+
+    if (!Out.good() || !HasValidSkeletalMeshChunkOffsets(Header))
+    {
+        return false;
+    }
+
+    Out.seekp(0, std::ios::beg);
+    WriteHeader(Out, Header);
+
+    return Out.good();
+}
+
+bool FBinarySerializer::LoadSkeletalMesh(const FString& BinaryPath, FSkeletalMesh& OutData)
+{
+    std::ifstream In(BinaryPath, std::ios::binary);
+    if (!In.is_open())
+    {
+        return false;
+    }
+
+    FSkeletalMeshBinaryHeader Header;
+    if (!ReadHeader(In, Header))
+    {
+        return false;
+    }
+
+    if (!IsValidSkeletalMeshHeader(Header) || !HasValidSkeletalMeshChunkOffsets(Header))
+    {
+        return false;
+    }
+
+    if (!SeekToBinaryOffset(In, Header.DependencyChunkOffset) ||
+        !ReadSkeletalDependencyChunk(In, OutData, Header.BoneCount))
+    {
+        return false;
+    }
+
+    if (!SeekToBinaryOffset(In, Header.StaticGeometryChunkOffset) ||
+        !ReadSkeletalStaticGeometryChunk(
+            In,
+            OutData,
+            Header.VertexCount,
+            Header.IndexCount,
+            Header.SectionCount,
+            Header.SlotCount))
+    {
+        return false;
+    }
+
+    if (!SeekToBinaryOffset(In, Header.CPUSkinningChunkOffset) ||
+        !ReadSkeletalCPUSkinningChunk(In, OutData, Header.VertexCount, Header.BoneCount))
+    {
+        return false;
+    }
+
+    if (!In.good())
+    {
+        return false;
+    }
+
+    return OutData.Vertices.size() == Header.VertexCount
+        && OutData.Indices.size() == Header.IndexCount
+        && OutData.Sections.size() == Header.SectionCount
+        && OutData.Slots.size() == Header.SlotCount
+        && OutData.Bones.size() == Header.BoneCount;
+}
+
+bool FBinarySerializer::ReadSkeletalMeshHeader(
+    const FString& BinaryPath,
+    FSkeletalMeshBinaryHeader& OutHeader) const
+{
+    std::ifstream In(BinaryPath, std::ios::binary);
+    if (!In.is_open())
+    {
+        return false;
+    }
+
+    if (!ReadHeader(In, OutHeader))
+    {
+        return false;
+    }
+
+    if (!In.good())
+    {
+        return false;
+    }
+
+    if (!IsValidSkeletalMeshHeader(OutHeader) || !HasValidSkeletalMeshChunkOffsets(OutHeader))
     {
         return false;
     }

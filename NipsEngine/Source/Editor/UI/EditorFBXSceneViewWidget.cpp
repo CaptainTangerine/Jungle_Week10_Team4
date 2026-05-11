@@ -1,10 +1,12 @@
 ﻿#include "Editor/UI/EditorFBXSceneViewWidget.h"
 
+#include "Asset/BinarySerializer.h"
 #include "Asset/SkeletalMesh.h"
 #include "Component/SceneComponent.h"
 #include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
+#include "Core/ResourceManager.h"
 #include "Editor/EditorEngine.h"
 #include "Editor/EditorRenderPipeline.h"
 #include "Editor/Viewport/FBXPreviewViewportClient.h"
@@ -17,6 +19,7 @@
 #include "Render/Renderer/Renderer.h"
 
 #include <commdlg.h>
+#include <chrono>
 #include <filesystem>
 
 namespace
@@ -83,6 +86,129 @@ namespace
         const std::filesystem::path FilePath(FPaths::ToWide(LoadedFilePath));
         const FString Stem = FPaths::ToUtf8(FilePath.stem().wstring());
         return Stem.empty() ? "FBX_ImportedScene" : FString("FBX_") + Stem;
+    }
+
+    uint64 GetFileWriteTimeTicks(const FString& Path)
+    {
+        namespace fs = std::filesystem;
+
+        fs::path FilePath(FPaths::ToAbsolute(FPaths::ToWide(Path)));
+        if (!fs::exists(FilePath))
+        {
+            return 0;
+        }
+
+        auto WriteTime = fs::last_write_time(FilePath);
+        auto Duration = WriteTime.time_since_epoch();
+        return static_cast<uint64>(std::chrono::duration_cast<std::chrono::seconds>(Duration).count());
+    }
+
+    FString MakeSkeletalMeshBinaryPath(const FString& SourcePath, int32 MeshIndex)
+    {
+        namespace fs = std::filesystem;
+
+        fs::path SourceFsPath(FPaths::ToWide(SourcePath));
+        fs::path BinDir = fs::path(FPaths::RootDir()) / "Asset" / "Mesh" / "Bin";
+
+        if (!fs::exists(BinDir))
+        {
+            fs::create_directories(BinDir);
+        }
+
+        fs::path BinaryFileName = SourceFsPath.stem();
+        if (MeshIndex > 0)
+        {
+            BinaryFileName += "_skel";
+            BinaryFileName += std::to_string(MeshIndex);
+        }
+        BinaryFileName += ".skmesh";
+
+        fs::path BinaryPath = BinDir / BinaryFileName;
+        return FPaths::ToString(BinaryPath.wstring());
+    }
+
+    bool IsSkeletalMeshBinaryValid(
+        const FString& SourcePath,
+        const FString& BinaryPath,
+        const FBinarySerializer& BinarySerializer)
+    {
+        FSkeletalMeshBinaryHeader Header;
+        if (!BinarySerializer.ReadSkeletalMeshHeader(BinaryPath, Header))
+        {
+            return false;
+        }
+
+        const uint64 SourceWriteTime = GetFileWriteTimeTicks(SourcePath);
+        return SourceWriteTime != 0 && Header.SourceFileWriteTime == SourceWriteTime;
+    }
+
+    void RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh)
+    {
+        for (FSkeletalMeshMaterialSlot& Slot : Mesh.Slots)
+        {
+            if (Slot.Material == nullptr)
+            {
+                Slot.Material = FResourceManager::Get().GetMaterial(Slot.SlotName);
+            }
+
+            if (Slot.Material == nullptr)
+            {
+                Slot.Material = FResourceManager::Get().GetMaterial("DefaultWhite");
+            }
+        }
+    }
+
+    struct FSkeletalMeshBinaryCacheStats
+    {
+        int32 LoadedCount = 0;
+        int32 SavedCount = 0;
+        int32 FailedCount = 0;
+    };
+
+    FSkeletalMesh* LoadOrCreateCachedSkeletalMesh(
+        FFBXImporter& Importer,
+        const FFBXSkeletalMeshImportData& MeshData,
+        const FString& SourcePath,
+        int32 MeshIndex,
+        FBinarySerializer& BinarySerializer,
+        FSkeletalMeshBinaryCacheStats& CacheStats)
+    {
+        const FString BinaryPath = MakeSkeletalMeshBinaryPath(SourcePath, MeshIndex);
+
+        if (IsSkeletalMeshBinaryValid(SourcePath, BinaryPath, BinarySerializer))
+        {
+            FSkeletalMesh* LoadedMesh = new FSkeletalMesh();
+            if (BinarySerializer.LoadSkeletalMesh(BinaryPath, *LoadedMesh))
+            {
+                RestoreSkeletalMeshSlotMaterials(*LoadedMesh);
+                ++CacheStats.LoadedCount;
+                return LoadedMesh;
+            }
+
+            delete LoadedMesh;
+            ++CacheStats.FailedCount;
+        }
+
+        FSkeletalMesh* RawMesh = Importer.CreateSkeletalMeshFromtImportData(MeshData);
+        if (RawMesh == nullptr)
+        {
+            ++CacheStats.FailedCount;
+            return nullptr;
+        }
+
+        RawMesh->SkeletonAssetPath = SourcePath;
+        RestoreSkeletalMeshSlotMaterials(*RawMesh);
+
+        if (BinarySerializer.SaveSkeletalMesh(BinaryPath, SourcePath, *RawMesh))
+        {
+            ++CacheStats.SavedCount;
+        }
+        else
+        {
+            ++CacheStats.FailedCount;
+        }
+
+        return RawMesh;
     }
 
     bool TryAttachStaticMeshToBone(
@@ -553,6 +679,8 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
     PreviewSkinnedMeshComponents.resize(ImportScene.SkeletalMeshes.size(), nullptr);
 
     FFBXImporter Importer;
+    FBinarySerializer BinarySerializer;
+    FSkeletalMeshBinaryCacheStats SkeletalMeshCacheStats;
     int32 StaticSpawnedCount  = 0;
     int32 SkeletalSpawnedCount = 0;
 
@@ -577,7 +705,13 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
             continue;
         }
 
-        FSkeletalMesh* RawMesh = Importer.CreateSkeletalMeshFromtImportData(MeshData);
+        FSkeletalMesh* RawMesh = LoadOrCreateCachedSkeletalMesh(
+            Importer,
+            MeshData,
+            LoadedFilePath,
+            SkeletalMeshIndex,
+            BinarySerializer,
+            SkeletalMeshCacheStats);
         if (RawMesh == nullptr)
         {
             continue;
@@ -655,7 +789,10 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
     if (TotalSpawned > 0)
     {
         StatusMessage = FString("FBX Actor 스폰 완료 — Static: ") + std::to_string(StaticSpawnedCount)
-            + ", Skeletal: " + std::to_string(SkeletalSpawnedCount) + ".";
+            + ", Skeletal: " + std::to_string(SkeletalSpawnedCount)
+            + ", SKMesh Load: " + std::to_string(SkeletalMeshCacheStats.LoadedCount)
+            + ", Save: " + std::to_string(SkeletalMeshCacheStats.SavedCount)
+            + ", Fail: " + std::to_string(SkeletalMeshCacheStats.FailedCount) + ".";
     }
     else
     {

@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Math/Matrix.h"
 #include "Render/Resource/VertexTypes.h"
 #include "Render/Resource/Material.h"
 
@@ -29,6 +30,7 @@ struct FSkeletalMeshMaterialSlot
 struct FSkeletalMesh
 {
     FString FilePathName;
+    FString SkeletonAssetPath;
 
     TArray<FSkeletalVertex> Vertices;
     TArray<uint32> Indices;

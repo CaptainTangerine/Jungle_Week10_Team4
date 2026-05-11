@@ -11,7 +11,7 @@ public:
 
 public:
     USkeletalMesh() = default;
-    ~USkeletalMesh() = default;
+    ~USkeletalMesh() override;
 
 
     // Getter, Setter

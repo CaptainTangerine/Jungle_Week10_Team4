@@ -2,8 +2,20 @@
 
 DEFINE_CLASS(USkeletalMesh, UObject)
 
+USkeletalMesh::~USkeletalMesh()
+{
+    delete MeshData;
+    MeshData = nullptr;
+}
+
 void USkeletalMesh::SetMeshData(FSkeletalMesh* InMeshData)
 {
+    if (MeshData == InMeshData)
+    {
+        return;
+    }
+
+    delete MeshData;
     MeshData = InMeshData;
 }
 

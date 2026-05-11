@@ -1,5 +1,6 @@
 ﻿#include "SkinnedMeshComponent.h"
 
+#include "Core/ResourceManager.h"
 #include "Core/PlatformTime.h"
 #include "Render/Resource/Material.h"
 
@@ -179,8 +180,10 @@ void USkinnedMeshComponent::Serialize(FArchive& Ar)
 
     if (Ar.IsLoading())
     {
-        ReleaseDynamicSkinResources();
-        SkinnedRenderResource.SourceSkeletalMesh = SkeletalMeshAsset;
+        USkeletalMesh* LoadedMesh = SkeletalMeshAssetPath.empty()
+            ? nullptr
+            : FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath);
+        SetSkeletalMesh(LoadedMesh);
         MarkBoundsDirty();
         MarkRenderStateDirty();
     }
@@ -225,6 +228,9 @@ void USkinnedMeshComponent::PostEditProperty(const char* PropertyName)
     switch (PropertyNameId(PropertyName))
     {
     case PropertyNameIdConstexpr("SkeletalMesh"):
+        SetSkeletalMesh(SkeletalMeshAssetPath.empty()
+            ? nullptr
+            : FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath));
         MarkRenderStateDirty();
         return;
 
