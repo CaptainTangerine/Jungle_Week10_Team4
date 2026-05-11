@@ -12,13 +12,27 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
 #include "ImGui/imgui.h"
+#include "ImGui/imgui_impl_dx11.h"
 #include "Object/Object.h"
+#include "Render/Renderer/Renderer.h"
 
 #include <commdlg.h>
 #include <filesystem>
 
 namespace
 {
+    void SetOpaqueBlendStateCallback(const ImDrawList*, const ImDrawCmd* Cmd)
+    {
+        ID3D11DeviceContext* DeviceContext = static_cast<ID3D11DeviceContext*>(Cmd->UserCallbackData);
+        if (!DeviceContext)
+        {
+            return;
+        }
+
+        const float BlendFactor[4] = { 0.f, 0.f, 0.f, 0.f };
+        DeviceContext->OMSetBlendState(nullptr, BlendFactor, 0xffffffff);
+    }
+
     const char* GetImportNodeTypeName(const FFBXImportNode& Node)
     {
         if (Node.SkeletalMeshIndex >= 0 && Node.StaticMeshIndex >= 0)
@@ -270,7 +284,12 @@ void FEditorFBXSceneViewWidget::RenderViewport()
 
     if (SRV)
     {
+        ID3D11DeviceContext* DeviceContext = EditorEngine->GetRenderer().GetFD3DDevice().GetDeviceContext();
+        ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+        DrawList->AddCallback(SetOpaqueBlendStateCallback, DeviceContext);
         ImGui::Image(reinterpret_cast<ImTextureID>(SRV), AvailSize);
+        DrawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     }
     else
     {

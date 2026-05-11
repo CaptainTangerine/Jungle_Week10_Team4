@@ -60,7 +60,7 @@ namespace
 
 FFBXImportScene FFBXImporter::Import(const FString& Path, const FFBXImportOptions& Options)
 {
-    FFBXSDKContext Context;
+    FFBXSDKContext& Context = FFBXSDKContext::Get();
     FFBXImportScene ImportScene = {};
     ImportScene.SourceFilePath = Path;
     ImportOptions = Options;
