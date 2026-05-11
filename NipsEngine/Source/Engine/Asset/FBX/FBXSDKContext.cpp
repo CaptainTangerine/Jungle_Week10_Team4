@@ -16,6 +16,12 @@ FFBXSDKContext::~FFBXSDKContext()
     Shutdown();
 }
 
+FFBXSDKContext& FFBXSDKContext::Get()
+{
+    static FFBXSDKContext Context;
+    return Context;
+}
+
 bool FFBXSDKContext::Initialize()
 {
     if (Manager != nullptr)

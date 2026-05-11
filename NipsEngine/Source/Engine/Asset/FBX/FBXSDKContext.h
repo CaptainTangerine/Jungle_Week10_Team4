@@ -50,6 +50,8 @@ public:
     FFBXSDKContext& operator=(const FFBXSDKContext&) = delete;
 
 public:
+    static FFBXSDKContext& Get();
+
     bool Initialize();
     FFBXSceneHandle LoadScene(const FString& FilePath);
     void Shutdown();
