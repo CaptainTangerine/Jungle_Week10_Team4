@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Component/GizmoComponent.h"
+#include "Component/SkinnedMeshComponent.h"
+#include "Object/Object.h"
+
 
 void FFBXPreviewViewportClient::Initialize(FWindowsWindow* InWindow)
 {
@@ -25,6 +29,8 @@ void FFBXPreviewViewportClient::Initialize(FWindowsWindow* InWindow)
     OrbitTarget = FVector(0.f, 0.f, 1.f);
     Camera.SetLookAt(OrbitTarget);
     SyncAnglesFromCamera();
+    
+    
 }
 
 void FFBXPreviewViewportClient::SetViewportRect(int32 InX, int32 InY, int32 InWidth, int32 InHeight)
@@ -121,6 +127,64 @@ void FFBXPreviewViewportClient::BuildSceneView(FSceneView& OutView) const
     OutView.CameraFrustum    = Camera.GetFrustum();
     OutView.ViewRect         = ViewRect;
     OutView.ViewMode         = EViewMode::Unlit;
+}
+
+void FFBXPreviewViewportClient::CreatePreviewGizmo()
+{
+    if (PreviewGizmo) return;
+    
+    PreviewGizmo = UObjectManager::Get().CreateObject<UGizmoComponent>();
+    PreviewGizmo->Deactivate();
+}
+
+void FFBXPreviewViewportClient::DestroyPreviewGizmo()
+{
+    if (!PreviewGizmo) return;
+    
+    UObjectManager::Get().DestroyObject(PreviewGizmo);
+    PreviewGizmo = nullptr;
+}
+
+void FFBXPreviewViewportClient::ClearBoneSelection()
+{
+    SelectedBoneIndex = -1;
+    SelectedSkinnedMeshComponent = nullptr;
+    
+    if (PreviewGizmo)
+    {
+        PreviewGizmo->Deactivate();
+    }
+}
+
+void FFBXPreviewViewportClient::SelectBone(USkinnedMeshComponent* InSkinnedMesh, int32 InBoneIndex)
+{
+    SelectedSkinnedMeshComponent = InSkinnedMesh;
+    SelectedBoneIndex = InBoneIndex;
+    
+    if (!PreviewGizmo) CreatePreviewGizmo();
+    
+    if (!SelectedSkinnedMeshComponent || SelectedBoneIndex<0)
+    {
+        ClearBoneSelection();
+        return;
+    }
+    
+    FMatrix BoneMeshTransform = FMatrix::Identity;
+    if (!SelectedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(SelectedBoneIndex,BoneMeshTransform))
+    {
+        ClearBoneSelection();
+        return;
+    }
+    
+    const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
+    
+    const FVector BoneWorldLocation = BoneWorldTransform.TransformPosition(FVector::ZeroVector);
+    
+    if (PreviewGizmo)
+    {
+        PreviewGizmo->ShowAtLocation(BoneWorldLocation);
+        PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
+    }
 }
 
 void FFBXPreviewViewportClient::SyncAnglesFromCamera()

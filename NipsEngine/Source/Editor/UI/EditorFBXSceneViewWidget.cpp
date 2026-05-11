@@ -175,6 +175,13 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 {
     ImportScene = FFBXImportScene{};
     SelectedNodeIndex = -1;
+    SelectedSkeletalMeshIndex = -1;
+    SelectedBoneIndex = -1;
+    PreviewSkinnedMeshComponents.clear();
+    if (EditorEngine)
+    {
+        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+    }
     LoadedFilePath = FilePath;
 
     FFBXImporter Importer;
@@ -301,8 +308,12 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         ImportScene = FFBXImportScene{};
         LoadedFilePath.clear();
         SelectedNodeIndex = -1;
+        SelectedSkeletalMeshIndex = -1;
+        SelectedBoneIndex = -1;
+        PreviewSkinnedMeshComponents.clear();
         if (EditorEngine)
         {
+            EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
             EditorEngine->ResetFBXPreviewWorld();
         }
         StatusMessage = "No FBX loaded.";
@@ -402,7 +413,7 @@ void FEditorFBXSceneViewWidget::RenderNodeRecursive(int32 NodeIndex)
     ImGui::PopID();
 }
 
-void FEditorFBXSceneViewWidget::RenderDetails() const
+void FEditorFBXSceneViewWidget::RenderDetails()
 {
     ImGui::Text("Node Details");
     ImGui::Separator();
@@ -464,6 +475,40 @@ void FEditorFBXSceneViewWidget::RenderDetails() const
         ImGui::Separator();
         ImGui::Text("Skeletal Mesh");
         ImGui::Text("Name: %s", Mesh.Name.c_str());
+
+        if (ImGui::TreeNode("Bones"))
+        {
+            USkinnedMeshComponent* SkinnedMeshComponent = nullptr;
+            if (Node.SkeletalMeshIndex < static_cast<int32>(PreviewSkinnedMeshComponents.size()))
+            {
+                SkinnedMeshComponent = PreviewSkinnedMeshComponents[Node.SkeletalMeshIndex];
+            }
+
+            for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Mesh.Bones.size()); ++BoneIndex)
+            {
+                const FBoneInfo& Bone = Mesh.Bones[BoneIndex];
+                ImGui::PushID(BoneIndex);
+
+                const bool bSelected =
+                    SelectedSkeletalMeshIndex == Node.SkeletalMeshIndex &&
+                    SelectedBoneIndex == BoneIndex;
+
+                if (ImGui::Selectable(Bone.Name.c_str(), bSelected))
+                {
+                    SelectedSkeletalMeshIndex = Node.SkeletalMeshIndex;
+                    SelectedBoneIndex = BoneIndex;
+
+                    if (EditorEngine && SkinnedMeshComponent)
+                    {
+                        EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, BoneIndex);
+                    }
+                }
+
+                ImGui::PopID();
+            }
+
+            ImGui::TreePop();
+        }
     }
 }
 
@@ -482,6 +527,11 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         StatusMessage = "FBX Preview World가 null입니다. FBX Actor 스폰 실패.";
         return;
     }
+    EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+    SelectedSkeletalMeshIndex = -1;
+    SelectedBoneIndex = -1;
+    PreviewSkinnedMeshComponents.clear();
+    PreviewSkinnedMeshComponents.resize(ImportScene.SkeletalMeshes.size(), nullptr);
 
     FFBXImporter Importer;
     int32 StaticSpawnedCount  = 0;
@@ -499,8 +549,9 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 
     // Skeletal Mesh 처리
     // Static mesh가 이후 bone attachment 대상을 찾을 수 있도록 skinned component를 먼저 생성한다.
-    for (const FFBXSkeletalMeshImportData& MeshData : ImportScene.SkeletalMeshes)
+    for (int32 SkeletalMeshIndex = 0; SkeletalMeshIndex < static_cast<int32>(ImportScene.SkeletalMeshes.size()); ++SkeletalMeshIndex)
     {
+        const FFBXSkeletalMeshImportData& MeshData = ImportScene.SkeletalMeshes[SkeletalMeshIndex];
         // 버텍스나 인덱스 데이터가 없는 노드는 건너뜀
         if (MeshData.Vertices.empty() || MeshData.Indices.empty())
         {
@@ -533,6 +584,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 
         ++SkeletalSpawnedCount;
         SpawnedSkinnedMeshComponents.push_back(MeshComponent);
+        PreviewSkinnedMeshComponents[SkeletalMeshIndex] = MeshComponent;
     }
 
     // Static Mesh 처리

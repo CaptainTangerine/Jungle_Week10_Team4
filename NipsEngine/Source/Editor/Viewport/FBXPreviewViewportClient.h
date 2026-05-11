@@ -4,6 +4,8 @@
 #include "Engine/Viewport/ViewportCamera.h"
 #include "Runtime/ViewportRect.h"
 
+class USkinnedMeshComponent;
+class UGizmoComponent;
 class  UWorld;
 struct FSceneView;
 struct FViewportMouseEvent;
@@ -32,6 +34,14 @@ public:
     void Tick(float DeltaTime) override;
     void BuildSceneView(FSceneView& OutView) const override;
 
+    //For Preview Gizmo
+    void CreatePreviewGizmo();
+    void DestroyPreviewGizmo();
+
+    void ClearBoneSelection();
+    void SelectBone(USkinnedMeshComponent* InSkinnedMesh, int32 InBoneIndex);
+    UGizmoComponent* GetPreviewGizmo() const { return PreviewGizmo; }
+
 private:
     void SyncAnglesFromCamera();
     void UpdateCameraRotation();
@@ -52,5 +62,10 @@ private:
 
     bool bShowGrid = true;
     bool bShowAxis = false;
+
+    //For Gizmo
+    UGizmoComponent* PreviewGizmo = nullptr;
+    USkinnedMeshComponent* SelectedSkinnedMeshComponent = nullptr;
+    int32 SelectedBoneIndex = -1;
 
 };

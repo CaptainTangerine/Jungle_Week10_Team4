@@ -532,3 +532,12 @@ EPrimitiveType UGizmoComponent::GetPrimitiveType() const
     }
     return CurPrimitiveType;
 }
+
+void UGizmoComponent::ShowAtLocation(const FVector& Location)
+{
+    TargetActor = nullptr;
+    AllSelectedActors = nullptr;
+    SetWorldLocation(Location);
+    SetTranslateMode();
+    SetVisibility(true);
+}

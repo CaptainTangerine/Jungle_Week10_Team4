@@ -44,6 +44,7 @@ private:
     void UpdateLinearDrag(const FRay& Ray);
     void UpdateAngularDrag(const FRay& Ray);
 
+
 public:
     DECLARE_CLASS(UGizmoComponent, UPrimitiveComponent)
     UGizmoComponent();
@@ -93,6 +94,9 @@ public:
     EPrimitiveType GetPrimitiveType() const override;
 
     UMaterialInterface* GetMaterial() { return Material; }
+    
+    //Skeletal Mesh Preview Related
+    void ShowAtLocation(const FVector& Location);
 
 private:
     const FMeshData* GizmoMeshData = nullptr;

@@ -4,6 +4,8 @@
 #include "Asset/FBX/FBXImporter.h"
 #include "Core/Containers/String.h"
 
+class USkinnedMeshComponent;
+
 class FEditorFBXSceneViewWidget : public FEditorWidget
 {
 public:
@@ -17,7 +19,7 @@ private:
     void RenderSummary() const;
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);
-    void RenderDetails() const;
+    void RenderDetails();
     void SpawnImportedFBXMeshActors();
 
 private:
@@ -25,5 +27,8 @@ private:
     FString LoadedFilePath;
     FString StatusMessage = "No FBX loaded.";
     int32 SelectedNodeIndex = -1;
+    int32 SelectedSkeletalMeshIndex = -1;
+    int32 SelectedBoneIndex = -1;
+    TArray<USkinnedMeshComponent*> PreviewSkinnedMeshComponents;
     bool bImportSkinnedMeshesAsStatic = false;
 };

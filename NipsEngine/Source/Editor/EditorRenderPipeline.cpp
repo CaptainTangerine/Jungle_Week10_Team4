@@ -199,7 +199,7 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     FShowFlags FBXShowFlags;
     FBXShowFlags.bGrid  = FBXClient.GetShowGrid();
     FBXShowFlags.bAxis  = FBXClient.GetShowAxis();
-    FBXShowFlags.bGizmo = false;
+    FBXShowFlags.bGizmo = true;
 
     Bus.Clear();
     Bus.SetViewProjection(SceneView.ViewMatrix, SceneView.ProjectionMatrix);
@@ -214,6 +214,7 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     Collector.SetLineBatcher(&Renderer.GetDebugLineBatcher());
     Collector.SetRingBatcher(&Renderer.GetDebugRingBatcher());
     Collector.CollectWorld(FBXWorld, FBXShowFlags, SceneView.ViewMode, Bus, &SceneView.CameraFrustum);
+    Collector.CollectGizmo(FBXClient.GetPreviewGizmo(), FBXShowFlags, Bus, false);
 
     Collector.CollectGrid(
         Settings.GridSpacing,
