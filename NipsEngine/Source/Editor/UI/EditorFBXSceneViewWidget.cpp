@@ -6,6 +6,7 @@
 #include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
+#include "Core/Logging/Log.h"
 #include "Core/ResourceManager.h"
 #include "Editor/EditorEngine.h"
 #include "Editor/EditorRenderPipeline.h"
@@ -177,22 +178,45 @@ namespace
 
         if (IsSkeletalMeshBinaryValid(SourcePath, BinaryPath, BinarySerializer))
         {
+            const auto BinaryStart = std::chrono::steady_clock::now();
             FSkeletalMesh* LoadedMesh = new FSkeletalMesh();
             if (BinarySerializer.LoadSkeletalMesh(BinaryPath, *LoadedMesh))
             {
+                const auto BinaryEnd = std::chrono::steady_clock::now();
+                const double BinaryLoadSec = std::chrono::duration<double>(BinaryEnd - BinaryStart).count();
                 RestoreSkeletalMeshSlotMaterials(*LoadedMesh);
                 ++CacheStats.LoadedCount;
+                UE_LOG(
+                    "[SkeletalMeshLoad] Source=Binary | Path=%s | MeshIndex=%d | BinarySec=%.6f | BinaryPath=%s",
+                    SourcePath.c_str(),
+                    MeshIndex,
+                    BinaryLoadSec,
+                    BinaryPath.c_str());
                 return LoadedMesh;
             }
 
             delete LoadedMesh;
             ++CacheStats.FailedCount;
+            UE_LOG(
+                "[SkeletalMeshLoad] Binary load failed | Path=%s | MeshIndex=%d | BinaryPath=%s",
+                SourcePath.c_str(),
+                MeshIndex,
+                BinaryPath.c_str());
         }
 
+        const auto CookStart = std::chrono::steady_clock::now();
         FSkeletalMesh* RawMesh = Importer.CreateSkeletalMeshFromtImportData(MeshData);
+        const auto CookEnd = std::chrono::steady_clock::now();
+        const double CookSec = std::chrono::duration<double>(CookEnd - CookStart).count();
         if (RawMesh == nullptr)
         {
             ++CacheStats.FailedCount;
+            UE_LOG(
+                "[SkeletalMeshLoad] Failed | Path=%s | MeshIndex=%d | CookSec=%.6f | BinaryPath=%s",
+                SourcePath.c_str(),
+                MeshIndex,
+                CookSec,
+                BinaryPath.c_str());
             return nullptr;
         }
 
@@ -202,10 +226,22 @@ namespace
         if (BinarySerializer.SaveSkeletalMesh(BinaryPath, SourcePath, *RawMesh))
         {
             ++CacheStats.SavedCount;
+            UE_LOG(
+                "[SkeletalMeshLoad] Source=FBX | Path=%s | MeshIndex=%d | CookSec=%.6f | BinarySave=OK | BinaryPath=%s",
+                SourcePath.c_str(),
+                MeshIndex,
+                CookSec,
+                BinaryPath.c_str());
         }
         else
         {
             ++CacheStats.FailedCount;
+            UE_LOG(
+                "[SkeletalMeshLoad] Source=FBX | Path=%s | MeshIndex=%d | CookSec=%.6f | BinarySave=FAIL | BinaryPath=%s",
+                SourcePath.c_str(),
+                MeshIndex,
+                CookSec,
+                BinaryPath.c_str());
         }
 
         return RawMesh;
