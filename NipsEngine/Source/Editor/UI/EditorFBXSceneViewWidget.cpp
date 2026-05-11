@@ -248,7 +248,21 @@ void FEditorFBXSceneViewWidget::RenderViewport()
     const int32 H = static_cast<int32>(AvailSize.y);
 
     FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
-    FBXClient.SetViewportRect(W, H);
+    const ImVec2 ImagePos = ImGui::GetCursorScreenPos();
+    POINT ViewportPos =
+    {
+        static_cast<LONG>(ImagePos.x),
+        static_cast<LONG>(ImagePos.y)
+    };
+    if (FBXClient.GetWindow())
+    {
+        ViewportPos = FBXClient.GetWindow()->ScreenToClientPoint(ViewportPos);
+    }
+
+    const ImVec2 ImageEnd(ImagePos.x + AvailSize.x, ImagePos.y + AvailSize.y);
+    const bool bHovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(ImagePos, ImageEnd);
+    FBXClient.SetViewportRect(ViewportPos.x, ViewportPos.y, W, H);
+    FBXClient.SetHovered(bHovered);
 
     // 렌더 파이프라인에서 이번 프레임에 렌더된 SRV를 가져와 표시
     const FEditorRenderPipeline* Pipeline = EditorEngine->GetEditorRenderPipeline();
@@ -256,48 +270,7 @@ void FEditorFBXSceneViewWidget::RenderViewport()
 
     if (SRV)
     {
-        const ImVec2 ImagePos = ImGui::GetCursorScreenPos();
         ImGui::Image(reinterpret_cast<ImTextureID>(SRV), AvailSize);
-
-        // 뷰포트 이미지에 마우스가 올라왔을 때 입력 전달
-        if (ImGui::IsItemHovered())
-        {
-            ImGuiIO& IO = ImGui::GetIO();
-
-            FViewportMouseEvent Ev;
-            Ev.LocalX      = static_cast<int32>(IO.MousePos.x - ImagePos.x);
-            Ev.LocalY      = static_cast<int32>(IO.MousePos.y - ImagePos.y);
-            Ev.bLeftDown   = IO.MouseDown[0];
-            Ev.bRightDown  = IO.MouseDown[1];
-            Ev.bMiddleDown = IO.MouseDown[2];
-
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-            {
-                FBXClient.OnMouseButtonDown(Ev);
-            }
-
-            if (IO.MouseDelta.x != 0.0f || IO.MouseDelta.y != 0.0f)
-            {
-                FBXClient.OnMouseMove(Ev);
-            }
-
-            if (IO.MouseWheel != 0.0f)
-            {
-                FBXClient.OnMouseWheel(IO.MouseWheel);
-            }
-        }
-
-        // 드래그 중에는 뷰포트 밖으로 나가도 입력 유지
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right))
-        {
-            ImGuiIO& IO = ImGui::GetIO();
-            FViewportMouseEvent Ev;
-            Ev.LocalX      = static_cast<int32>(IO.MousePos.x - ImagePos.x);
-            Ev.LocalY      = static_cast<int32>(IO.MousePos.y - ImagePos.y);
-            Ev.bLeftDown   = IO.MouseDown[0];
-            Ev.bRightDown  = IO.MouseDown[1];
-            FBXClient.OnMouseButtonUp(Ev);
-        }
     }
     else
     {
