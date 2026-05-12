@@ -1,7 +1,7 @@
 ﻿#include "SkinnedMeshComponent.h"
 
-#include "Core/ResourceManager.h"
 #include "Core/PlatformTime.h"
+#include "Core/ResourceManager.h"
 #include "Render/Resource/Material.h"
 
 #include <cfloat>
@@ -424,16 +424,18 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
         InitializeSkinnedVerticesFromBindPose();
     }
 
-    CurrentBoneLocalTransforms.resize(Bones.size());
-    CurrentBoneGlobalMeshTransforms.resize(Bones.size());
-
-    // 현재 프레임의 Bone Local Trnasform 구성
-    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+    if (CurrentBoneLocalTransforms.size() != Bones.size())
     {
-        CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
+        CurrentBoneLocalTransforms.resize(Bones.size());
+        for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+        {
+            CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
+        }
     }
 
-    // 하드코딩으로 neck 본 LocalTrnasform 변경
+    // 테스트용 Head 흔들림은 현재 포즈를 덮지 않고 skinning 계산에만 임시 반영한다.
+    int32 DebugHeadBoneIndex = -1;
+    FMatrix DebugHeadOriginalLocal = FMatrix::Identity;
     const double TimeSeconds = FPlatformTime::Seconds();
     constexpr float DegToRad = MathUtil::PI / 180.0f;
     const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 5) * DegToRad;
@@ -441,22 +443,24 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
     {
         const FString& BoneName = Bones[BoneIdx].Name;
-        const bool bIsNeckBone =
+        const bool bIsHeadBone =
             BoneName.find("Head") != FString::npos ||
             BoneName.find("head") != FString::npos ||
             BoneName.find("HEAD") != FString::npos;
 
-        if (!bIsNeckBone)
+        if (!bIsHeadBone)
         {
             continue;
         }
 
-        const FMatrix OffsetTransform = FMatrix::MakeRotationX(DebugYawRadians);
-        CurrentBoneLocalTransforms[BoneIdx] = CurrentBoneLocalTransforms[BoneIdx] * OffsetTransform;
+        DebugHeadBoneIndex = BoneIdx;
+        DebugHeadOriginalLocal = CurrentBoneLocalTransforms[BoneIdx];
+        CurrentBoneLocalTransforms[BoneIdx] =
+            DebugHeadOriginalLocal * FMatrix::MakeRotationX(DebugYawRadians);
         break;
     }
 
-    // 변환된 Local로 GloabalTrnasform 계산
+    // 현재 Bone Local Transform으로 Global Transform을 계산한다.
     // 인덱스 순서가 부모부터 시작된다는 보장이 없다고 판단하여 DFS로 순회하면서 보장
     RebuildCurrentBoneGlobalTransforms(Bones);
 
@@ -520,6 +524,12 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
         DstVertex.UVs = SrcVertex.UVs;
     }
 
+    if (DebugHeadBoneIndex >= 0)
+    {
+        CurrentBoneLocalTransforms[DebugHeadBoneIndex] = DebugHeadOriginalLocal;
+        RebuildCurrentBoneGlobalTransforms(Bones);
+    }
+
     MarkBoundsDirty();
     MarkRenderStateDirty();
 }
@@ -541,6 +551,57 @@ int32 USkinnedMeshComponent::FindBoneIndexByName(const FString& BoneName) const
     }
 
     return -1;
+}
+
+bool USkinnedMeshComponent::GetCurrentBoneLocalTransform(int32 BoneIndex, FMatrix& OutTransform) const
+{
+    if (SkeletalMeshAsset == nullptr)
+    {
+        return false;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(Bones.size()))
+    {
+        return false;
+    }
+
+    if (BoneIndex >= static_cast<int32>(CurrentBoneLocalTransforms.size()))
+    {
+        OutTransform = Bones[BoneIndex].LocalTransform;
+        return true;
+    }
+
+    OutTransform = CurrentBoneLocalTransforms[BoneIndex];
+    return true;
+}
+
+bool USkinnedMeshComponent::SetCurrentBoneLocalTransform(int32 BoneIndex, const FMatrix& InTransform)
+{
+    if (SkeletalMeshAsset == nullptr)
+    {
+        return false;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(Bones.size()))
+    {
+        return false;
+    }
+
+    if (CurrentBoneLocalTransforms.size() != Bones.size())
+    {
+        CurrentBoneLocalTransforms.resize(Bones.size());
+        for (int32 CurrentBoneIndex = 0; CurrentBoneIndex < static_cast<int32>(Bones.size()); ++CurrentBoneIndex)
+        {
+            CurrentBoneLocalTransforms[CurrentBoneIndex] = Bones[CurrentBoneIndex].LocalTransform;
+        }
+    }
+
+    CurrentBoneLocalTransforms[BoneIndex] = InTransform;
+    RebuildCurrentBoneGlobalTransforms(Bones);
+    UpdateCPUSkinning();
+    return true;
 }
 
 bool USkinnedMeshComponent::GetCurrentBoneGlobalMeshTransform(int32 BoneIndex, FMatrix& OutTransform) const
@@ -660,6 +721,8 @@ void USkinnedMeshComponent::RebuildCurrentBoneGlobalTransforms(const TArray<FBon
 void USkinnedMeshComponent::ReleaseDynamicSkinResources()
 {
     SkinnedRenderResource.Release();
+    CurrentBoneLocalTransforms.clear();
+    CurrentBoneGlobalMeshTransforms.clear();
 }
 
 void USkinnedMeshComponent::MarkBoundsDirty()

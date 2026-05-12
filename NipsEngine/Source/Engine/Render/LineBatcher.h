@@ -89,6 +89,8 @@ public:
     // 현재 축적된 라인 개수
     uint32 GetLineCount() const;
 
+    void SetDepthStencilType(EDepthStencilType Type);
+
     void AddArc(const FVector& Position, const FVector& Forward, const FVector& Axis, float ConeAngle, float Radius, uint32 TipIdx, const FVector4& Color);
     void AddCircle(const FVector& Center, const FVector& AxisA, const FVector& AxisB, float Radius, const FVector4& Color);
 

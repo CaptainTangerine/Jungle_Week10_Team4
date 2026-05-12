@@ -35,6 +35,7 @@ class UGizmoComponent;
 class FEditorSettings;
 class FSelectionManager;
 class FSceneViewport;
+struct FGizmoDelta;
 struct FEditorViewportState;
 
 class FEditorViewportClient : public FViewportClient
@@ -108,6 +109,7 @@ public:
 
 private:
     void TickInteraction(float DeltaTime);
+    void ApplyGizmoDeltaToSelection(const FGizmoDelta& Delta);
     void HandleBoxSelection();
     bool TryProjectWorldToViewport(const FVector& WorldPos, float& OutViewportX, float& OutViewportY, float& OutDepth) const;
     void FocusPrimarySelection();

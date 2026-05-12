@@ -8,16 +8,30 @@ class AActor;
 class UMaterialInterface;
 struct FMeshData;
 
+enum EGizmoMode
+{
+    Translate,
+    Rotate,
+    Scale,
+    End
+};
+
+struct FGizmoDelta
+{
+    EGizmoMode Mode = EGizmoMode::End;
+
+    int32 AxisIdx = -1;
+    FVector Axis = FVector::ZeroVector;
+
+    //Delta Direction
+    FVector WorldDelta = FVector::ZeroVector;
+    //Delta Amount
+    float Amount = 0.f;
+};
+
 class UGizmoComponent : public UPrimitiveComponent
 {
 private:
-    enum EGizmoMode
-    {
-        Translate,
-        Rotate,
-        Scale,
-        End
-    };
 
     AActor* TargetActor = nullptr;
     const TArray<AActor*>* AllSelectedActors = nullptr;
@@ -32,14 +46,16 @@ private:
     bool bIsWorldSpace = true;
     bool bPressedOnHandle = false;
 
+    FGizmoDelta PendingDelta;
+
     bool IntersectRayAxis(const FRay& Ray, FVector AxisEnd, float& OutRayT);
     const FMeshData* GetActiveMeshData() const;
 
-    // Target manipulation handlers.
-    void HandleDrag(float DragAmount);
-    void TranslateTarget(float DragAmount);
-    void RotateTarget(float DragAmount);
-    void ScaleTarget(float DragAmount);
+    // Drag delta commit handlers.
+    void CommitDelta(float DragAmount);
+    void CommitTranslateDelta(float DragAmount);
+    void CommitRotateDelta(float DragAmount);
+    void CommitScaleDelta(float DragAmount);
 
     void UpdateLinearDrag(const FRay& Ray);
     void UpdateAngularDrag(const FRay& Ray);
@@ -79,6 +95,7 @@ public:
 
     void SetNextMode();
     void UpdateGizmoMode(EGizmoMode NewMode);
+    EGizmoMode GetGizmoMode() const { return CurMode; }
     inline void SetTranslateMode() { UpdateGizmoMode(EGizmoMode::Translate); }
     inline void SetRotateMode() { UpdateGizmoMode(EGizmoMode::Rotate); }
     inline void SetScaleMode() { UpdateGizmoMode(EGizmoMode::Scale); }
@@ -94,9 +111,10 @@ public:
     EPrimitiveType GetPrimitiveType() const override;
 
     UMaterialInterface* GetMaterial() { return Material; }
-    
+
     //Skeletal Mesh Preview Related
     void ShowAtLocation(const FVector& Location);
+    FGizmoDelta ConsumePendingDelta();
 
 private:
     const FMeshData* GizmoMeshData = nullptr;

@@ -99,105 +99,57 @@ bool UGizmoComponent::IntersectRayAxis(const FRay& Ray, FVector AxisEnd, float& 
     return false;
 }
 
-void UGizmoComponent::HandleDrag(float DragAmount)
+void UGizmoComponent::CommitDelta(float DragAmount)
 {
     switch (CurMode)
     {
     case EGizmoMode::Translate:
-        TranslateTarget(DragAmount);
+        CommitTranslateDelta(DragAmount);
         break;
     case EGizmoMode::Rotate:
-        RotateTarget(DragAmount);
+        CommitRotateDelta(DragAmount);
         break;
     case EGizmoMode::Scale:
-        ScaleTarget(DragAmount);
+        CommitScaleDelta(DragAmount);
         break;
     default:
         break;
     }
-
-    UpdateGizmoTransform();
 }
 
-void UGizmoComponent::TranslateTarget(float DragAmount)
+void UGizmoComponent::CommitTranslateDelta(float DragAmount)
 {
-    if (!TargetActor || !TargetActor->GetRootComponent()) return;
+    const FVector Axis = GetVectorForAxis(SelectedAxis);
+    const FVector WorldDelta = Axis * DragAmount;
 
-    FVector ConstrainedDelta = GetVectorForAxis(SelectedAxis) * DragAmount;
-
-    AddWorldOffset(ConstrainedDelta);
-
-    if (AllSelectedActors)
-    {
-        for (AActor* Actor : *AllSelectedActors)
-        {
-            if (Actor) Actor->AddActorWorldOffset(ConstrainedDelta);
-        }
-    }
-    else
-    {
-        TargetActor->AddActorWorldOffset(ConstrainedDelta);
-    }
+    PendingDelta.Mode = EGizmoMode::Translate;
+    PendingDelta.AxisIdx = SelectedAxis;
+    PendingDelta.Axis = Axis;
+    PendingDelta.WorldDelta = WorldDelta;
+    PendingDelta.Amount = DragAmount;
 }
 
-void UGizmoComponent::RotateTarget(float DragAmount)
+void UGizmoComponent::CommitRotateDelta(float DragAmount)
 {
-    if (!TargetActor || !TargetActor->GetRootComponent()) return;
+    const FVector Axis = GetVectorForAxis(SelectedAxis);
 
-    FVector RotationAxis = GetVectorForAxis(SelectedAxis);
-    FQuat DeltaQuat(RotationAxis, DragAmount);
-
-    auto ApplyRotation = [&](AActor* Actor)
-        {
-            if (!Actor || !Actor->GetRootComponent()) return;
-            FQuat CurQuat = FQuat::MakeFromEuler(Actor->GetActorRotation());
-            FQuat NewQuat = CurQuat * DeltaQuat;
-            Actor->SetActorRotation(NewQuat.Euler());
-        };
-
-    if (AllSelectedActors)
-    {
-        for (AActor* Actor : *AllSelectedActors)
-        {
-            ApplyRotation(Actor);
-        }
-    }
-    else
-    {
-        ApplyRotation(TargetActor);
-    }
+    PendingDelta.Mode = EGizmoMode::Rotate;
+    PendingDelta.AxisIdx = SelectedAxis;
+    PendingDelta.Axis = Axis;
+    PendingDelta.WorldDelta = FVector::ZeroVector;
+    PendingDelta.Amount = DragAmount;
 }
 
-void UGizmoComponent::ScaleTarget(float DragAmount)
+void UGizmoComponent::CommitScaleDelta(float DragAmount)
 {
-    if (!TargetActor || !TargetActor->GetRootComponent()) return;
+    const FVector Axis = GetVectorForAxis(SelectedAxis);
+    const float ScaleDelta = DragAmount * ScaleSensitivity;
 
-    float ScaleDelta = DragAmount * ScaleSensitivity;
-
-    auto ApplyScale = [&](AActor* Actor)
-        {
-            if (!Actor) return;
-            FVector NewScale = Actor->GetActorScale();
-            switch (SelectedAxis)
-            {
-            case 0: NewScale.X += ScaleDelta; break;
-            case 1: NewScale.Y += ScaleDelta; break;
-            case 2: NewScale.Z += ScaleDelta; break;
-            }
-            Actor->SetActorScale(NewScale);
-        };
-
-    if (AllSelectedActors)
-    {
-        for (AActor* Actor : *AllSelectedActors)
-        {
-            ApplyScale(Actor);
-        }
-    }
-    else
-    {
-        ApplyScale(TargetActor);
-    }
+    PendingDelta.Mode = EGizmoMode::Scale;
+    PendingDelta.AxisIdx = SelectedAxis;
+    PendingDelta.Axis = Axis;
+    PendingDelta.WorldDelta = FVector::ZeroVector;
+    PendingDelta.Amount = ScaleDelta;
 }
 
 void UGizmoComponent::SetTargetLocation(FVector NewLocation)
@@ -343,7 +295,7 @@ void UGizmoComponent::UpdateLinearDrag(const FRay& Ray)
 
     float DragAmount = FullDelta.DotProduct(AxisVector);
 
-    HandleDrag(DragAmount);
+    CommitDelta(DragAmount);
 
     LastIntersectionLocation = CurrentIntersectionLocation;
 }
@@ -382,7 +334,7 @@ void UGizmoComponent::UpdateAngularDrag(const FRay& Ray)
     // 역치를 넘었을 때만 이전 위치에서 갱신됩니다.
     if (std::abs(DeltaAngle) > AngularThreshold)
     {
-        HandleDrag(DeltaAngle);
+        CommitDelta(DeltaAngle);
         LastIntersectionLocation = CurrentIntersectionLocation;
     }
 }
@@ -420,7 +372,7 @@ void UGizmoComponent::UpdateDrag(const FRay& Ray)
         return;
     }
 
-    if (SelectedAxis == -1 || TargetActor == nullptr)
+    if (SelectedAxis == -1)
     {
         return;
     }
@@ -458,11 +410,12 @@ void UGizmoComponent::UpdateGizmoMode(EGizmoMode NewMode)
 
 void UGizmoComponent::UpdateGizmoTransform()
 {
-    if (!TargetActor || !TargetActor->GetRootComponent()) return;
-
-    SetWorldLocation(TargetActor->GetActorLocation());
-
-    FVector ActorRot = TargetActor->GetActorRotation();
+    FVector ActorRot = FVector::ZeroVector;
+    if (TargetActor && TargetActor->GetRootComponent())
+    {
+        SetWorldLocation(TargetActor->GetActorLocation());
+        ActorRot = TargetActor->GetActorRotation();
+    }
 
     switch (CurMode)
     {
@@ -538,6 +491,19 @@ void UGizmoComponent::ShowAtLocation(const FVector& Location)
     TargetActor = nullptr;
     AllSelectedActors = nullptr;
     SetWorldLocation(Location);
-    SetTranslateMode();
+    UpdateGizmoTransform();
     SetVisibility(true);
+}
+
+FGizmoDelta UGizmoComponent::ConsumePendingDelta()
+{
+    FGizmoDelta ResultDelta;
+    if (PendingDelta.Mode == EGizmoMode::End)
+    {
+        return ResultDelta;
+    }
+
+    ResultDelta = PendingDelta;
+    PendingDelta = FGizmoDelta();
+    return ResultDelta;
 }

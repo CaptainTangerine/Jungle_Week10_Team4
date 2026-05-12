@@ -211,10 +211,19 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
 
     Renderer.GetDebugLineBatcher().Clear();
     Renderer.GetDebugRingBatcher().Clear();
+    FLineBatcher& DebugLineBatcher = Renderer.GetDebugLineBatcher();
+    DebugLineBatcher.SetDepthStencilType(EDepthStencilType::NoDepth);
     Collector.SetLineBatcher(&Renderer.GetDebugLineBatcher());
     Collector.SetRingBatcher(&Renderer.GetDebugRingBatcher());
     Collector.CollectWorld(FBXWorld, FBXShowFlags, SceneView.ViewMode, Bus, &SceneView.CameraFrustum);
-    Collector.CollectGizmo(FBXClient.GetPreviewGizmo(), FBXShowFlags, Bus, false);
+    FBXClient.AddSelectedBoneDebugLines(DebugLineBatcher);
+    UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo();
+    if (PreviewGizmo)
+    {
+        PreviewGizmo->ApplyScreenSpaceScaling(SceneView.CameraPosition);
+    }
+    const bool bPreviewGizmoActive = FBXClient.IsHovered() || (PreviewGizmo && PreviewGizmo->IsHolding());
+    Collector.CollectGizmo(PreviewGizmo, FBXShowFlags, Bus, bPreviewGizmoActive);
 
     Collector.CollectGrid(
         Settings.GridSpacing,
@@ -225,6 +234,7 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
 
     Renderer.PrepareBatchers(Bus);
     Renderer.Render(Bus);
+    DebugLineBatcher.SetDepthStencilType(EDepthStencilType::Default);
 
     // GridRenderPass 등 후속 패스가 합성된 최종 결과를 사용
     FBXPreviewSRV = RTS.FinalSRV;
