@@ -36,7 +36,7 @@
 constexpr uint32 STATIC_MESH_BINARY_MAGIC = 0x4853454D; // 'MESH'
 constexpr uint32 STATIC_MESH_BINARY_VERSION = 2;
 constexpr uint32 SKELETAL_MESH_BINARY_MAGIC = 0x484D4B53; // 'SKMH'
-constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 2;
+constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 3;
 
 //	Vailidation Checkers
 constexpr uint32 MAX_STATIC_MESH_VERTEX_COUNT   = 10'000'000;
@@ -885,6 +885,8 @@ void FBinarySerializer::WriteSkeletalDependencyChunk(
     const FString& SkeletonAssetPath = Data.SkeletonAssetPath.empty() ? SourcePath : Data.SkeletonAssetPath;
     WriteString(Out, SkeletonAssetPath);
     WriteString(Out, Data.FilePathName);
+    WriteMatrix(Out, Data.SourceNodeLocalTransform);
+    WriteMatrix(Out, Data.SourceNodeGlobalTransform);
 
     uint32 BoneCount = static_cast<uint32>(Data.Bones.size());
     WriteUInt32LE(Out, BoneCount);
@@ -915,6 +917,12 @@ bool FBinarySerializer::ReadSkeletalDependencyChunk(
     }
 
     if (!ReadString(In, OutData.FilePathName))
+    {
+        return false;
+    }
+
+    if (!ReadMatrix(In, OutData.SourceNodeLocalTransform) ||
+        !ReadMatrix(In, OutData.SourceNodeGlobalTransform))
     {
         return false;
     }

@@ -115,6 +115,8 @@ FSkeletalMesh* FFBXImporter::CreateSkeletalMeshFromtImportData(const FFBXSkeleta
     Mesh->Sections = ImportData.Sections;
     Mesh->Slots = ImportData.MaterialSlots;
     Mesh->Bones = ImportData.Bones;
+    Mesh->SourceNodeLocalTransform = ImportData.SourceNodeLocalTransformMatrix;
+    Mesh->SourceNodeGlobalTransform = ImportData.SourceNodeGlobalTransformMatrix;
     Mesh->LocalBounds = BuildLocalBounds(ImportData);
 
     return Mesh;
@@ -340,6 +342,8 @@ bool FFBXImporter::BuildSkeletalMeshImportData(FbxNode* Node, FbxMesh* Mesh, OUT
 {
     FFBXMeshRawData RawData;
     RawData.SourceNodeIndex = OutMeshData.SourceNodeIndex;
+    OutMeshData.SourceNodeLocalTransformMatrix = ConvertFbxMatrix(Node->EvaluateLocalTransform());
+    OutMeshData.SourceNodeGlobalTransformMatrix = ConvertFbxMatrix(Node->EvaluateGlobalTransform());
 
     if (!BuildMeshRawData(Node, Mesh, RawData))
     {
