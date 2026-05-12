@@ -194,6 +194,99 @@ namespace
         return ImportData;
     }
 
+    FFBXStaticMeshImportData BuildStaticImportDataFromEmbeddedMesh(const FSkeletalMeshEmbeddedStaticMesh& Mesh)
+    {
+        FFBXStaticMeshImportData ImportData = {};
+        ImportData.Name = Mesh.Name;
+        ImportData.SourceNodeIndex = Mesh.SourceNodeIndex;
+        ImportData.Vertices = Mesh.Vertices;
+        ImportData.Indices = Mesh.Indices;
+        ImportData.Sections = Mesh.Sections;
+        ImportData.MaterialSlots = Mesh.MaterialSlots;
+
+        for (FStaticMeshMaterialSlot& Slot : ImportData.MaterialSlots)
+        {
+            if (Slot.Material == nullptr)
+            {
+                Slot.Material = FResourceManager::Get().GetMaterialInterface(Slot.SlotName);
+            }
+
+            if (Slot.Material == nullptr)
+            {
+                Slot.Material = FResourceManager::Get().GetMaterial("DefaultWhite");
+            }
+        }
+
+        return ImportData;
+    }
+
+    int32 FindBoneIndexByName(const FSkeletalMesh& Mesh, const FString& BoneName)
+    {
+        for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Mesh.Bones.size()); ++BoneIndex)
+        {
+            if (Mesh.Bones[BoneIndex].Name == BoneName)
+            {
+                return BoneIndex;
+            }
+        }
+
+        return -1;
+    }
+
+    bool AppendCachedSceneToImportScene(const FSkeletalMesh& Mesh, FFBXImportScene& OutScene)
+    {
+        if (Mesh.SceneNodes.empty())
+        {
+            return false;
+        }
+
+        OutScene.Nodes.clear();
+        OutScene.StaticMeshes.clear();
+        OutScene.SkeletalMeshes.clear();
+
+        OutScene.StaticMeshes.reserve(Mesh.EmbeddedStaticMeshes.size());
+        for (const FSkeletalMeshEmbeddedStaticMesh& EmbeddedStaticMesh : Mesh.EmbeddedStaticMeshes)
+        {
+            OutScene.StaticMeshes.push_back(BuildStaticImportDataFromEmbeddedMesh(EmbeddedStaticMesh));
+        }
+
+        int32 SourceNodeIndex = -1;
+        OutScene.Nodes.reserve(Mesh.SceneNodes.size());
+        for (const FSkeletalMeshSceneNode& CachedNode : Mesh.SceneNodes)
+        {
+            FFBXImportNode Node = {};
+            Node.Name = CachedNode.Name;
+            Node.ParentIndex = CachedNode.ParentIndex;
+            Node.Children = CachedNode.Children;
+            Node.LocalTransformMatrix = CachedNode.LocalTransformMatrix;
+            Node.GlobalTransformMatrix = CachedNode.GlobalTransformMatrix;
+            Node.StaticMeshIndex = CachedNode.StaticMeshIndex >= 0 &&
+                    CachedNode.StaticMeshIndex < static_cast<int32>(OutScene.StaticMeshes.size())
+                ? CachedNode.StaticMeshIndex
+                : -1;
+            Node.SkeletalMeshIndex = CachedNode.SkeletalMeshIndex == Mesh.SourceSceneSkeletalMeshIndex ? 0 : -1;
+            Node.BoneIndex = CachedNode.BoneIndex >= 0 &&
+                    CachedNode.BoneIndex < static_cast<int32>(Mesh.Bones.size())
+                ? CachedNode.BoneIndex
+                : FindBoneIndexByName(Mesh, CachedNode.Name);
+
+            if (Node.SkeletalMeshIndex == 0)
+            {
+                SourceNodeIndex = static_cast<int32>(OutScene.Nodes.size());
+            }
+
+            OutScene.Nodes.push_back(Node);
+        }
+
+        if (SourceNodeIndex < 0)
+        {
+            SourceNodeIndex = OutScene.Nodes.empty() ? -1 : 0;
+        }
+
+        OutScene.SkeletalMeshes.push_back(BuildSkeletalImportDataFromMesh(Mesh, SourceNodeIndex));
+        return true;
+    }
+
     void AddBoneNodesRecursive(
         const FSkeletalMesh& Mesh,
         const TArray<TArray<int32>>& BoneChildren,
@@ -278,6 +371,13 @@ namespace
         OutLoadSec += std::chrono::duration<double>(LoadEnd - LoadStart).count();
 
         RestoreSkeletalMeshSlotMaterials(Mesh);
+        if (OutScene.SkeletalMeshes.empty() && OutScene.StaticMeshes.empty() &&
+            AppendCachedSceneToImportScene(Mesh, OutScene))
+        {
+            OutScene.SourceFilePath = SceneSourcePath;
+            return true;
+        }
+
         AppendSkeletalMeshToImportScene(Mesh, GetPathStemName(BinaryPath), OutScene, 0);
         OutScene.SourceFilePath = SceneSourcePath;
         return true;
@@ -348,6 +448,7 @@ namespace
 
     FSkeletalMesh* LoadOrCreateCachedSkeletalMesh(
         FFBXImporter& Importer,
+        const FFBXImportScene& ImportScene,
         const FFBXSkeletalMeshImportData& MeshData,
         const FString& SourcePath,
         int32 MeshIndex,
@@ -408,6 +509,7 @@ namespace
         }
 
         RawMesh->SkeletonAssetPath = SourcePath;
+        Importer.AttachSceneDataToSkeletalMesh(ImportScene, MeshIndex, *RawMesh);
         RestoreSkeletalMeshSlotMaterials(*RawMesh);
 
         if (BinarySerializer.SaveSkeletalMesh(BinaryPath, SourcePath, *RawMesh))
@@ -1108,6 +1210,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 
         FSkeletalMesh* RawMesh = LoadOrCreateCachedSkeletalMesh(
             Importer,
+            ImportScene,
             MeshData,
             LoadedFilePath,
             SkeletalMeshIndex,

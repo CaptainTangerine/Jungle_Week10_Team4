@@ -31,7 +31,7 @@ struct FStaticMeshBinaryHeader
 struct FSkeletalMeshBinaryHeader
 {
     uint32 MagicNumber = 0x484D4B53;
-    uint32 Version = 3;
+    uint32 Version = 4;
     uint32 VertexCount = 0;
     uint32 IndexCount = 0;
     uint32 SectionCount = 0;
@@ -42,6 +42,7 @@ struct FSkeletalMeshBinaryHeader
     uint64 DependencyChunkOffset = 0;
     uint64 StaticGeometryChunkOffset = 0;
     uint64 CPUSkinningChunkOffset = 0;
+    uint64 SceneChunkOffset = 0;
 };
 
 class FBinarySerializer
@@ -126,4 +127,7 @@ private:
         FSkeletalMesh& OutData,
         uint32 VertexCount,
         uint32 BoneCount) const;
+
+    void WriteSkeletalSceneChunk(std::ofstream& Out, const FSkeletalMesh& Data);
+    bool ReadSkeletalSceneChunk(std::ifstream& In, FSkeletalMesh& OutData) const;
 };
