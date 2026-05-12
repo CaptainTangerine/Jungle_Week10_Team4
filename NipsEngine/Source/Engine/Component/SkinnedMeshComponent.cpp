@@ -474,8 +474,10 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
     // 현재 Bone Local Transform으로 Global Transform을 계산한다.
     // 인덱스 순서가 부모부터 시작된다는 보장이 없다고 판단하여 DFS로 순회하면서 보장
+    // 각 Bone의 Local에서 Global로 가는 행렬을 갱신합니다. :)
     RebuildCurrentBoneGlobalTransforms(Bones);
 
+    //
     const int32 BoneCount = static_cast<int32>(Bones.size());
     TArray<FMatrix> SkinningMatrices(BoneCount);
     for (int32 BoneIdx = 0; BoneIdx < BoneCount; ++BoneIdx)
@@ -484,7 +486,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     }
 
     // 매 프레임 마다 Vertex 마다 수정을 해서 비효율
-    // TODO : CPU Skinning으로 가중치를 셰이더에서 계산
+    // TODO : GPU Skinning으로 가중치를 셰이더에서 계산
     for (int32 VertexIdx = 0; VertexIdx < static_cast<int32>(SourceVertices.size()); ++VertexIdx)
     {
         const FSkeletalVertex& SrcVertex = SourceVertices[VertexIdx];
