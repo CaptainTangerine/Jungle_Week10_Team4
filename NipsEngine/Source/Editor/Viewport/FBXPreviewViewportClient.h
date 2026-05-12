@@ -4,8 +4,10 @@
 #include "Engine/Viewport/ViewportCamera.h"
 #include "Runtime/ViewportRect.h"
 #include "Engine/Component/GizmoComponent.h"
+#include "Render/Common/ViewTypes.h"
 
 class USkinnedMeshComponent;
+class UPrimitiveComponent;
 class  UWorld;
 class FLineBatcher;
 struct FSceneView;
@@ -34,6 +36,9 @@ public:
     void SetShowGrid(bool bIn) { bShowGrid = bIn; }
     void SetShowAxis(bool bIn) { bShowAxis = bIn; }
 
+    EViewMode GetViewMode() const { return ViewMode; }
+    void SetViewMode(EViewMode InMode) { ViewMode = InMode; }
+
     void Tick(float DeltaTime) override;
     void BuildSceneView(FSceneView& OutView) const override;
 
@@ -47,6 +52,11 @@ public:
     void SetPreviewGizmoMode(EGizmoMode NewMode);
     void AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const;
 
+    void RegisterPickableComponent(UPrimitiveComponent* Component, int32 NodeIndex);
+    void ClearPickableComponents();
+    int32 ConsumePickedNodeIndex();
+    UPrimitiveComponent* GetSelectedComponent() const { return SelectedPickedComponent; }
+
 private:
     void SyncAnglesFromCamera();
     void UpdateCameraRotation();
@@ -55,7 +65,7 @@ private:
     void ZoomCamera(float Notches);
     void MoveCamera(float DeltaTime);
     void TickPreviewGizmoInteraction();
-    bool RaycastPreviewWorld(const FRay& Ray) const;
+    bool RaycastPreviewWorld(const FRay& Ray);
     void ApplyPreviewGizmoDelta(const FGizmoDelta& Delta);
     void ApplySelectedBoneTranslation(const FVector& WorldDelta);
     void ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle);
@@ -74,10 +84,16 @@ private:
 
     bool bShowGrid = true;
     bool bShowAxis = false;
+    EViewMode ViewMode = EViewMode::Lit;
 
     //For Gizmo
     UGizmoComponent* PreviewGizmo = nullptr;
     USkinnedMeshComponent* SelectedSkinnedMeshComponent = nullptr;
     int32 SelectedBoneIndex = -1;
+
+    TArray<UPrimitiveComponent*> PickableComponents;
+    TArray<int32>                PickableNodeIndices;
+    int32                        PickedNodeIndex = -1;
+    UPrimitiveComponent*         SelectedPickedComponent = nullptr;
 
 };

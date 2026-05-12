@@ -19,8 +19,10 @@ private:
     void RenderSummary() const;
     void RenderTree();
     void RenderNodeRecursive(int32 NodeIndex);
+    void RenderBoneTreeRecursive(const FFBXSkeletalMeshImportData& Mesh, int32 BoneIndex, int32 SkeletalMeshIndex, USkinnedMeshComponent* SkinnedMeshComponent);
     void RenderDetails();
     void SpawnImportedFBXMeshActors();
+    void SelectRootBoneForNode(int32 NodeIndex);
 
 private:
     FFBXImportScene ImportScene;

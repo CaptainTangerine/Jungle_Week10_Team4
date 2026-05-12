@@ -63,6 +63,19 @@ namespace
         LineBatcher.AddLine(Base1, End, Color);
         LineBatcher.AddLine(Base2, End, Color);
     }
+
+    FQuat MakeRotationFromWorldMatrix(const FMatrix& WorldMatrix)
+    {
+        FMatrix RotationMatrix = FMatrix::Identity;
+        RotationMatrix.SetAxes(
+            WorldMatrix.GetUnitAxis(EAxis::X),
+            WorldMatrix.GetUnitAxis(EAxis::Y),
+            WorldMatrix.GetUnitAxis(EAxis::Z));
+
+        FQuat Rotation(RotationMatrix);
+        Rotation.Normalize();
+        return Rotation;
+    }
 }
 
 void FFBXPreviewViewportClient::Initialize(FWindowsWindow* InWindow)
@@ -135,6 +148,21 @@ void FFBXPreviewViewportClient::Tick(float DeltaTime)
     const bool bAltDown = Input.GetKey(VK_MENU);
 
     TickPreviewGizmoInteraction();
+
+    // Mesh picking when gizmo is not active
+    if (bHovered && Input.GetKeyDown(VK_LBUTTON) && !Input.GetKey(VK_MENU))
+    {
+        if (!PreviewGizmo || !PreviewGizmo->IsVisible())
+        {
+            POINT MousePoint = Input.GetMousePos();
+            if (Window) { MousePoint = Window->ScreenToClientPoint(MousePoint); }
+            const float LocalX = static_cast<float>(MousePoint.x - ViewRect.X);
+            const float LocalY = static_cast<float>(MousePoint.y - ViewRect.Y);
+            const FRay Ray = Camera.DeprojectScreenToWorld(LocalX, LocalY, WindowWidth, WindowHeight);
+            RaycastPreviewWorld(Ray);
+        }
+    }
+
     if (PreviewGizmo)
     {
         const FGizmoDelta GizmoDelta = PreviewGizmo->ConsumePendingDelta();
@@ -191,7 +219,7 @@ void FFBXPreviewViewportClient::BuildSceneView(FSceneView& OutView) const
     OutView.CameraOrthoHeight = Camera.GetOrthoHeight();
     OutView.CameraFrustum    = Camera.GetFrustum();
     OutView.ViewRect         = ViewRect;
-    OutView.ViewMode         = EViewMode::Unlit;
+    OutView.ViewMode         = ViewMode;
 }
 
 void FFBXPreviewViewportClient::CreatePreviewGizmo()
@@ -208,6 +236,27 @@ void FFBXPreviewViewportClient::DestroyPreviewGizmo()
     
     UObjectManager::Get().DestroyObject(PreviewGizmo);
     PreviewGizmo = nullptr;
+}
+
+void FFBXPreviewViewportClient::RegisterPickableComponent(UPrimitiveComponent* Component, int32 NodeIndex)
+{
+    PickableComponents.push_back(Component);
+    PickableNodeIndices.push_back(NodeIndex);
+}
+
+void FFBXPreviewViewportClient::ClearPickableComponents()
+{
+    PickableComponents.clear();
+    PickableNodeIndices.clear();
+    PickedNodeIndex = -1;
+    SelectedPickedComponent = nullptr;
+}
+
+int32 FFBXPreviewViewportClient::ConsumePickedNodeIndex()
+{
+    const int32 Result = PickedNodeIndex;
+    PickedNodeIndex = -1;
+    return Result;
 }
 
 void FFBXPreviewViewportClient::ClearBoneSelection()
@@ -244,10 +293,11 @@ void FFBXPreviewViewportClient::SelectBone(USkinnedMeshComponent* InSkinnedMesh,
     const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
     
     const FVector BoneWorldLocation = BoneWorldTransform.TransformPosition(FVector::ZeroVector);
+    const FQuat BoneWorldRotation = MakeRotationFromWorldMatrix(BoneWorldTransform);
     
     if (PreviewGizmo)
     {
-        PreviewGizmo->ShowAtLocation(BoneWorldLocation);
+        PreviewGizmo->ShowAtTransform(BoneWorldLocation, BoneWorldRotation);
         PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
     }
 }
@@ -455,8 +505,11 @@ void FFBXPreviewViewportClient::TickPreviewGizmoInteraction()
     }
 }
 
-bool FFBXPreviewViewportClient::RaycastPreviewWorld(const FRay& Ray) const
+bool FFBXPreviewViewportClient::RaycastPreviewWorld(const FRay& Ray)
 {
+    // 클릭 시작 시 선택 초기화 — 아무것도 안 맞으면 아웃라인 해제
+    SelectedPickedComponent = nullptr;
+
     if (!PreviewWorld)
     {
         return false;
@@ -478,6 +531,15 @@ bool FFBXPreviewViewportClient::RaycastPreviewWorld(const FRay& Ray) const
         FHitResult HitResult{};
         if (Primitive->Raycast(Ray, HitResult))
         {
+            for (int32 i = 0; i < static_cast<int32>(PickableComponents.size()); ++i)
+            {
+                if (PickableComponents[i] == Primitive)
+                {
+                    PickedNodeIndex = PickableNodeIndices[i];
+                    SelectedPickedComponent = Primitive;
+                    break;
+                }
+            }
             return true;
         }
     }
@@ -628,7 +690,9 @@ void FFBXPreviewViewportClient::SyncPreviewGizmoToSelectedBone()
     }
 
     const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
-    PreviewGizmo->SetWorldLocation(BoneWorldTransform.TransformPosition(FVector::ZeroVector));
+    PreviewGizmo->ShowAtTransform(
+        BoneWorldTransform.TransformPosition(FVector::ZeroVector),
+        MakeRotationFromWorldMatrix(BoneWorldTransform));
     PreviewGizmo->SetVisibility(true);
     PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
 }

@@ -1,4 +1,4 @@
-#include "DepthPrepassRenderPass.h"
+﻿#include "DepthPrepassRenderPass.h"
 
 #include "Core/ResourceManager.h"
 #include "Render/Resource/Material.h"
@@ -20,14 +20,6 @@ namespace
         }
 
         if (Cmd.Material->GetEffectiveMaterialDomain() != EMaterialDomain::Surface)
-        {
-            return false;
-        }
-
-        FMaterialParamValue OpacityValue;
-        if (Cmd.Material->GetParam("Opacity", OpacityValue) &&
-            OpacityValue.Type == EMaterialParamType::Float &&
-            std::get<float>(OpacityValue.Value) < 0.999f)
         {
             return false;
         }

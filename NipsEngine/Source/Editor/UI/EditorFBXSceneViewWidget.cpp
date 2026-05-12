@@ -826,31 +826,64 @@ void FEditorFBXSceneViewWidget::Render(float DeltaTime)
         return;
     }
 
+    // 뷰포트 피킹 결과를 선택 노드에 반영
+    if (EditorEngine)
+    {
+        const int32 Picked = EditorEngine->GetFBXPreviewViewportClient().ConsumePickedNodeIndex();
+        if (Picked >= 0)
+        {
+            SelectedNodeIndex = Picked;
+            SelectRootBoneForNode(Picked);
+        }
+    }
+
     RenderToolbar();
     ImGui::Separator();
 
-    const float SidePanelWidth = 320.0f;
-    const float ViewportWidth  = ImGui::GetContentRegionAvail().x - SidePanelWidth - ImGui::GetStyle().ItemSpacing.x;
+    static float SidePanelWidth = 320.0f;
+    constexpr float SplitterW   = 5.0f;
+    const float AvailW = ImGui::GetContentRegionAvail().x;
+    const float ViewportWidth = std::max(100.0f, AvailW - SidePanelWidth - SplitterW - ImGui::GetStyle().ItemSpacing.x * 2.0f);
 
     // 왼쪽: 3D 뷰포트
-    ImGui::BeginChild("##FBXViewport", ImVec2(ViewportWidth > 100.0f ? ViewportWidth : 100.0f, 0), false);
+    ImGui::BeginChild("##FBXViewport", ImVec2(ViewportWidth, 0), false);
     RenderViewport();
     ImGui::EndChild();
 
     ImGui::SameLine();
 
+    // 드래그 스플리터
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+    ImGui::Button("##VSplitter", ImVec2(SplitterW, -1.0f));
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    if (ImGui::IsItemActive())
+    {
+        SidePanelWidth -= ImGui::GetIO().MouseDelta.x;
+        SidePanelWidth = std::max(180.0f, std::min(SidePanelWidth, AvailW - 200.0f));
+    }
+
+    ImGui::SameLine();
+
     // 오른쪽: Summary + Tree + Details
-    ImGui::BeginChild("##FBXSidePanel", ImVec2(0, 0), false);
+    ImGui::BeginChild("##FBXSidePanel", ImVec2(SidePanelWidth, 0), false);
 
     RenderSummary();
     ImGui::Separator();
 
-    const float HalfHeight = ImGui::GetContentRegionAvail().y * 0.5f;
-    ImGui::BeginChild("##FBXTreePanel", ImVec2(0, HalfHeight), true);
-    RenderTree();
-    ImGui::EndChild();
-
-    ImGui::Separator();
+    // Scene Node Graph — 축소된 고정 높이 (최대 160px)
+    if (ImGui::CollapsingHeader("Scene Node Graph", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        const float TreeHeight = std::min(ImGui::GetContentRegionAvail().y * 0.35f, 160.0f);
+        ImGui::BeginChild("##FBXTreePanel", ImVec2(0, TreeHeight), true);
+        RenderTree();
+        ImGui::EndChild();
+    }
 
     ImGui::BeginChild("##FBXDetailsPanel", ImVec2(0, 0), true);
     RenderDetails();
@@ -894,6 +927,38 @@ void FEditorFBXSceneViewWidget::RenderViewport()
         DrawList->AddCallback(SetOpaqueBlendStateCallback, DeviceContext);
         ImGui::Image(reinterpret_cast<ImTextureID>(SRV), ImageSize);
         DrawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+        if (!ImportScene.Nodes.empty())
+        {
+            int32 TotalVertices = 0;
+            int32 TotalTriangles = 0;
+            for (const FFBXStaticMeshImportData& Mesh : ImportScene.StaticMeshes)
+            {
+                TotalVertices  += static_cast<int32>(Mesh.Vertices.size());
+                TotalTriangles += static_cast<int32>(Mesh.Indices.size()) / 3;
+            }
+            for (const FFBXSkeletalMeshImportData& Mesh : ImportScene.SkeletalMeshes)
+            {
+                TotalVertices  += static_cast<int32>(Mesh.Vertices.size());
+                TotalTriangles += static_cast<int32>(Mesh.Indices.size()) / 3;
+            }
+
+            char VertText[64];
+            char TriText[64];
+            snprintf(VertText, sizeof(VertText), "버텍스 : %d", TotalVertices);
+            snprintf(TriText,  sizeof(TriText),  "트라이앵글  : %d", TotalTriangles);
+
+            const float     Pad  = 8.0f;
+            const float     LineH = ImGui::GetTextLineHeight();
+            const ImVec2    Base(ImagePos.x + Pad, ImagePos.y + Pad);
+
+            // 그림자
+            DrawList->AddText(ImVec2(Base.x + 1, Base.y + 1),            IM_COL32(0, 0, 0, 200), VertText);
+            DrawList->AddText(ImVec2(Base.x + 1, Base.y + LineH + 3 + 1), IM_COL32(0, 0, 0, 200), TriText);
+            // 본문
+            DrawList->AddText(Base,                                        IM_COL32(255, 255, 255, 255), VertText);
+            DrawList->AddText(ImVec2(Base.x, Base.y + LineH + 3),         IM_COL32(255, 255, 255, 255), TriText);
+        }
     }
     else
     {
@@ -937,18 +1002,20 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
 
     // --- Show Flags ---
     ImGui::Separator();
-    ImGui::TextDisabled("Show Flags");
-    ImGui::SameLine();
 
     if (EditorEngine)
     {
         FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
 
-        bool bGrid = FBXClient.GetShowGrid();
-        bool bAxis = FBXClient.GetShowAxis();
-        if (ImGui::Checkbox("Grid", &bGrid))   { FBXClient.SetShowGrid(bGrid); }
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Axis", &bAxis))   { FBXClient.SetShowAxis(bAxis); }
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::BeginCombo("##FBXShowFlags", "Show Flags"))
+        {
+            bool bGrid = FBXClient.GetShowGrid();
+            bool bAxis = FBXClient.GetShowAxis();
+            if (ImGui::Checkbox("Grid", &bGrid)) { FBXClient.SetShowGrid(bGrid); }
+            if (ImGui::Checkbox("Axis", &bAxis)) { FBXClient.SetShowAxis(bAxis); }
+            ImGui::EndCombo();
+        }
         ImGui::SameLine();
 
         if (UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo())
@@ -972,9 +1039,51 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
             }
             ImGui::SameLine();
         }
+
+        // --- View Mode ---
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+        ImGui::TextDisabled("View Mode");
+        ImGui::SameLine();
+
+        static constexpr EViewMode ViewModes[] = {
+            EViewMode::Lit,
+            EViewMode::Unlit,
+            EViewMode::Wireframe,
+            EViewMode::SceneDepth,
+            EViewMode::WorldNormal,
+        };
+        static constexpr const char* ViewModeLabels[] = {
+            "Lit",
+            "Unlit",
+            "Wireframe",
+            "Scene Depth",
+            "World Normal",
+        };
+
+        EViewMode CurrentMode = FBXClient.GetViewMode();
+        const char* CurrentLabel = "Lit";
+        for (int32 i = 0; i < static_cast<int32>(IM_ARRAYSIZE(ViewModes)); ++i)
+        {
+            if (ViewModes[i] == CurrentMode) { CurrentLabel = ViewModeLabels[i]; break; }
+        }
+
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::BeginCombo("##FBXViewMode", CurrentLabel))
+        {
+            for (int32 i = 0; i < static_cast<int32>(IM_ARRAYSIZE(ViewModes)); ++i)
+            {
+                const bool bSel = (ViewModes[i] == CurrentMode);
+                if (ImGui::Selectable(ViewModeLabels[i], bSel))
+                    FBXClient.SetViewMode(ViewModes[i]);
+                if (bSel)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
     }
 
-    ImGui::SameLine();
     ImGui::TextDisabled("|");
     ImGui::SameLine();
     ImGui::TextDisabled("Import");
@@ -1051,11 +1160,70 @@ void FEditorFBXSceneViewWidget::RenderNodeRecursive(int32 NodeIndex)
     ImGui::PopID();
 }
 
+void FEditorFBXSceneViewWidget::RenderBoneTreeRecursive(
+    const FFBXSkeletalMeshImportData& Mesh,
+    int32 BoneIndex,
+    int32 SkeletalMeshIndex,
+    USkinnedMeshComponent* SkinnedMeshComponent)
+{
+    if (BoneIndex < 0 || BoneIndex >= static_cast<int32>(Mesh.Bones.size()))
+    {
+        return;
+    }
+
+    const FBoneInfo& Bone = Mesh.Bones[BoneIndex];
+
+    // 이 본의 자식이 있는지 확인
+    bool bHasChildren = false;
+    for (const FBoneInfo& OtherBone : Mesh.Bones)
+    {
+        if (OtherBone.ParentIndex == BoneIndex)
+        {
+            bHasChildren = true;
+            break;
+        }
+    }
+
+    ImGuiTreeNodeFlags Flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (!bHasChildren)
+    {
+        Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+    if (SelectedSkeletalMeshIndex == SkeletalMeshIndex && SelectedBoneIndex == BoneIndex)
+    {
+        Flags |= ImGuiTreeNodeFlags_Selected;
+    }
+
+    ImGui::PushID(BoneIndex);
+    const bool bOpen = ImGui::TreeNodeEx("##Bone", Flags, "%s", Bone.Name.c_str());
+
+    if (ImGui::IsItemClicked())
+    {
+        SelectedSkeletalMeshIndex = SkeletalMeshIndex;
+        SelectedBoneIndex = BoneIndex;
+        if (EditorEngine && SkinnedMeshComponent)
+        {
+            EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, BoneIndex);
+        }
+    }
+
+    if (bHasChildren && bOpen)
+    {
+        for (int32 i = 0; i < static_cast<int32>(Mesh.Bones.size()); ++i)
+        {
+            if (Mesh.Bones[i].ParentIndex == BoneIndex)
+            {
+                RenderBoneTreeRecursive(Mesh, i, SkeletalMeshIndex, SkinnedMeshComponent);
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+}
+
 void FEditorFBXSceneViewWidget::RenderDetails()
 {
-    ImGui::Text("Node Details");
-    ImGui::Separator();
-
     if (SelectedNodeIndex < 0 || SelectedNodeIndex >= static_cast<int32>(ImportScene.Nodes.size()))
     {
         ImGui::TextDisabled("Select a node.");
@@ -1064,44 +1232,28 @@ void FEditorFBXSceneViewWidget::RenderDetails()
 
     const FFBXImportNode& Node = ImportScene.Nodes[SelectedNodeIndex];
 
-    ImGui::Text("Index: %d", SelectedNodeIndex);
-    ImGui::Text("Name: %s", Node.Name.c_str());
-    ImGui::TextColored(GetImportNodeTypeColor(Node), "Type: %s", GetImportNodeTypeName(Node));
-    ImGui::Text("Parent: %d", Node.ParentIndex);
-    ImGui::Text("Children: %d", static_cast<int32>(Node.Children.size()));
-    ImGui::Text("StaticMeshIndex: %d", Node.StaticMeshIndex);
-    ImGui::Text("SkeletalMeshIndex: %d", Node.SkeletalMeshIndex);
-    ImGui::Text("BoneIndex: %d", Node.BoneIndex);
-
     if (Node.StaticMeshIndex >= 0 && Node.StaticMeshIndex < static_cast<int32>(ImportScene.StaticMeshes.size()))
     {
         const FFBXStaticMeshImportData& Mesh = ImportScene.StaticMeshes[Node.StaticMeshIndex];
+        ImGui::Text("Static Mesh: %s", Mesh.Name.c_str());
+        ImGui::Text("Vertices: %d  Indices: %d", static_cast<int32>(Mesh.Vertices.size()), static_cast<int32>(Mesh.Indices.size()));
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text("Static Mesh");
-        ImGui::Text("Name: %s", Mesh.Name.c_str());
-        ImGui::Text("Vertices: %d", static_cast<int32>(Mesh.Vertices.size()));
-        ImGui::Text("Indices: %d", static_cast<int32>(Mesh.Indices.size()));
-        ImGui::Text("Sections: %d", static_cast<int32>(Mesh.Sections.size()));
-        ImGui::Text("Material Slots: %d", static_cast<int32>(Mesh.MaterialSlots.size()));
 
         if (ImGui::TreeNode("Sections"))
         {
-            for (int32 SectionIndex = 0; SectionIndex < static_cast<int32>(Mesh.Sections.size()); ++SectionIndex)
+            for (int32 i = 0; i < static_cast<int32>(Mesh.Sections.size()); ++i)
             {
-                const FStaticMeshSection& Section = Mesh.Sections[SectionIndex];
-                ImGui::Text("#%d Start=%u Count=%u Slot=%d",
-                            SectionIndex, Section.StartIndex, Section.IndexCount, Section.MaterialSlotIndex);
+                const FStaticMeshSection& S = Mesh.Sections[i];
+                ImGui::Text("#%d  Start=%u  Count=%u  Slot=%d", i, S.StartIndex, S.IndexCount, S.MaterialSlotIndex);
             }
             ImGui::TreePop();
         }
 
         if (ImGui::TreeNode("Material Slots"))
         {
-            for (int32 SlotIndex = 0; SlotIndex < static_cast<int32>(Mesh.MaterialSlots.size()); ++SlotIndex)
+            for (int32 i = 0; i < static_cast<int32>(Mesh.MaterialSlots.size()); ++i)
             {
-                const FStaticMeshMaterialSlot& Slot = Mesh.MaterialSlots[SlotIndex];
-                ImGui::Text("#%d %s", SlotIndex, Slot.SlotName.c_str());
+                ImGui::Text("#%d  %s", i, Mesh.MaterialSlots[i].SlotName.c_str());
             }
             ImGui::TreePop();
         }
@@ -1110,53 +1262,71 @@ void FEditorFBXSceneViewWidget::RenderDetails()
     if (Node.SkeletalMeshIndex >= 0 && Node.SkeletalMeshIndex < static_cast<int32>(ImportScene.SkeletalMeshes.size()))
     {
         const FFBXSkeletalMeshImportData& Mesh = ImportScene.SkeletalMeshes[Node.SkeletalMeshIndex];
+        ImGui::Text("Skeletal Mesh: %s", Mesh.Name.c_str());
+        ImGui::Text("Bones: %d", static_cast<int32>(Mesh.Bones.size()));
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text("Skeletal Mesh");
-        ImGui::Text("Name: %s", Mesh.Name.c_str());
+
+        USkinnedMeshComponent* SkinnedMeshComponent = nullptr;
+        if (Node.SkeletalMeshIndex < static_cast<int32>(PreviewSkinnedMeshComponents.size()))
+        {
+            SkinnedMeshComponent = PreviewSkinnedMeshComponents[Node.SkeletalMeshIndex];
+        }
 
         if (ImGui::TreeNode("Bones"))
         {
-            USkinnedMeshComponent* SkinnedMeshComponent = nullptr;
-            if (Node.SkeletalMeshIndex < static_cast<int32>(PreviewSkinnedMeshComponents.size()))
-            {
-                SkinnedMeshComponent = PreviewSkinnedMeshComponents[Node.SkeletalMeshIndex];
-            }
-
             for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Mesh.Bones.size()); ++BoneIndex)
             {
-                const FBoneInfo& Bone = Mesh.Bones[BoneIndex];
-                ImGui::PushID(BoneIndex);
-
-                const bool bSelected =
-                    SelectedSkeletalMeshIndex == Node.SkeletalMeshIndex &&
-                    SelectedBoneIndex == BoneIndex;
-
-                if (ImGui::Selectable(Bone.Name.c_str(), bSelected))
+                if (Mesh.Bones[BoneIndex].ParentIndex == -1)
                 {
-                    SelectedSkeletalMeshIndex = Node.SkeletalMeshIndex;
-                    SelectedBoneIndex = BoneIndex;
-
-                    if (EditorEngine && SkinnedMeshComponent)
-                    {
-                        EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, BoneIndex);
-                    }
+                    RenderBoneTreeRecursive(Mesh, BoneIndex, Node.SkeletalMeshIndex, SkinnedMeshComponent);
                 }
-
-                ImGui::PopID();
             }
-
             ImGui::TreePop();
         }
     }
+}
 
-    if (Node.BoneIndex >= 0)
+void FEditorFBXSceneViewWidget::SelectRootBoneForNode(int32 NodeIndex)
+{
+    if (!EditorEngine || NodeIndex < 0 || NodeIndex >= static_cast<int32>(ImportScene.Nodes.size()))
     {
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text("Bone");
-        ImGui::Text("Index: %d", Node.BoneIndex);
+        return;
     }
+
+    const FFBXImportNode& Node = ImportScene.Nodes[NodeIndex];
+    if (Node.SkeletalMeshIndex < 0 ||
+        Node.SkeletalMeshIndex >= static_cast<int32>(ImportScene.SkeletalMeshes.size()) ||
+        Node.SkeletalMeshIndex >= static_cast<int32>(PreviewSkinnedMeshComponents.size()))
+    {
+        SelectedSkeletalMeshIndex = -1;
+        SelectedBoneIndex = -1;
+        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+        return;
+    }
+
+    const FFBXSkeletalMeshImportData& Mesh = ImportScene.SkeletalMeshes[Node.SkeletalMeshIndex];
+    int32 RootBoneIndex = -1;
+    for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Mesh.Bones.size()); ++BoneIndex)
+    {
+        if (Mesh.Bones[BoneIndex].ParentIndex == -1)
+        {
+            RootBoneIndex = BoneIndex;
+            break;
+        }
+    }
+
+    USkinnedMeshComponent* SkinnedMeshComponent = PreviewSkinnedMeshComponents[Node.SkeletalMeshIndex];
+    if (RootBoneIndex < 0 || SkinnedMeshComponent == nullptr)
+    {
+        SelectedSkeletalMeshIndex = -1;
+        SelectedBoneIndex = -1;
+        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+        return;
+    }
+
+    SelectedSkeletalMeshIndex = Node.SkeletalMeshIndex;
+    SelectedBoneIndex = RootBoneIndex;
+    EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, RootBoneIndex);
 }
 
 void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
@@ -1175,6 +1345,8 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         return;
     }
     EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+    EditorEngine->GetFBXPreviewViewportClient().ClearPickableComponents();
+    SelectedNodeIndex = -1;
     SelectedSkeletalMeshIndex = -1;
     SelectedBoneIndex = -1;
     PreviewSkinnedMeshComponents.clear();
@@ -1238,6 +1410,11 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
             ApplyImportNodeTransform(MeshComponent, ImportScene.Nodes[MeshData.SourceNodeIndex]);
         }
 
+        if (MeshData.SourceNodeIndex >= 0)
+        {
+            EditorEngine->GetFBXPreviewViewportClient().RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
+        }
+
         ++SkeletalSpawnedCount;
         SpawnedSkinnedMeshComponents.push_back(MeshComponent);
         PreviewSkinnedMeshComponents[SkeletalMeshIndex] = MeshComponent;
@@ -1276,6 +1453,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
                 MeshData.SourceNodeIndex,
                 ImportScene,
                 SpawnedSkinnedMeshComponents);
+            EditorEngine->GetFBXPreviewViewportClient().RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
         }
 
         ++StaticSpawnedCount;
