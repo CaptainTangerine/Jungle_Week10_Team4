@@ -448,6 +448,38 @@ void FEditorFBXSceneViewWidget::RenderViewport()
         DrawList->AddCallback(SetOpaqueBlendStateCallback, DeviceContext);
         ImGui::Image(reinterpret_cast<ImTextureID>(SRV), AvailSize);
         DrawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+        if (!ImportScene.Nodes.empty())
+        {
+            int32 TotalVertices = 0;
+            int32 TotalTriangles = 0;
+            for (const FFBXStaticMeshImportData& Mesh : ImportScene.StaticMeshes)
+            {
+                TotalVertices  += static_cast<int32>(Mesh.Vertices.size());
+                TotalTriangles += static_cast<int32>(Mesh.Indices.size()) / 3;
+            }
+            for (const FFBXSkeletalMeshImportData& Mesh : ImportScene.SkeletalMeshes)
+            {
+                TotalVertices  += static_cast<int32>(Mesh.Vertices.size());
+                TotalTriangles += static_cast<int32>(Mesh.Indices.size()) / 3;
+            }
+
+            char VertText[64];
+            char TriText[64];
+            snprintf(VertText, sizeof(VertText), "버텍스 : %d", TotalVertices);
+            snprintf(TriText,  sizeof(TriText),  "트라이앵글  : %d", TotalTriangles);
+
+            const float     Pad  = 8.0f;
+            const float     LineH = ImGui::GetTextLineHeight();
+            const ImVec2    Base(ImagePos.x + Pad, ImagePos.y + Pad);
+
+            // 그림자
+            DrawList->AddText(ImVec2(Base.x + 1, Base.y + 1),            IM_COL32(0, 0, 0, 200), VertText);
+            DrawList->AddText(ImVec2(Base.x + 1, Base.y + LineH + 3 + 1), IM_COL32(0, 0, 0, 200), TriText);
+            // 본문
+            DrawList->AddText(Base,                                        IM_COL32(255, 255, 255, 255), VertText);
+            DrawList->AddText(ImVec2(Base.x, Base.y + LineH + 3),         IM_COL32(255, 255, 255, 255), TriText);
+        }
     }
     else
     {
