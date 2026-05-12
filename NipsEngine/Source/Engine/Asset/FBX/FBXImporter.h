@@ -97,6 +97,10 @@ public:
     FFBXImportScene Import(const FString& Path, const FFBXImportOptions& Options = FFBXImportOptions{});
     FStaticMesh*   CreateStaticMeshFromImportData(const FFBXStaticMeshImportData& ImportData) const;
     FSkeletalMesh* CreateSkeletalMeshFromtImportData(const FFBXSkeletalMeshImportData& ImportData) const;
+    void AttachSceneDataToSkeletalMesh(
+        const FFBXImportScene& ImportScene,
+        int32 SkeletalMeshIndex,
+        FSkeletalMesh& OutMesh) const;
 
 private:
     void TraversalNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene);

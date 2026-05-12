@@ -122,6 +122,55 @@ FSkeletalMesh* FFBXImporter::CreateSkeletalMeshFromtImportData(const FFBXSkeleta
     return Mesh;
 }
 
+void FFBXImporter::AttachSceneDataToSkeletalMesh(
+    const FFBXImportScene& ImportScene,
+    int32 SkeletalMeshIndex,
+    FSkeletalMesh& OutMesh) const
+{
+    OutMesh.SourceSceneSkeletalMeshIndex = SkeletalMeshIndex;
+
+    OutMesh.SceneNodes.clear();
+    OutMesh.SceneNodes.reserve(ImportScene.Nodes.size());
+    for (const FFBXImportNode& ImportNode : ImportScene.Nodes)
+    {
+        FSkeletalMeshSceneNode SceneNode = {};
+        SceneNode.Name = ImportNode.Name;
+        SceneNode.ParentIndex = ImportNode.ParentIndex;
+        SceneNode.Children = ImportNode.Children;
+        SceneNode.LocalTransformMatrix = ImportNode.LocalTransformMatrix;
+        SceneNode.GlobalTransformMatrix = ImportNode.GlobalTransformMatrix;
+        SceneNode.StaticMeshIndex = ImportNode.StaticMeshIndex;
+        SceneNode.SkeletalMeshIndex = ImportNode.SkeletalMeshIndex;
+
+        for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(OutMesh.Bones.size()); ++BoneIndex)
+        {
+            if (OutMesh.Bones[BoneIndex].Name == SceneNode.Name)
+            {
+                SceneNode.BoneIndex = BoneIndex;
+                break;
+            }
+        }
+
+        OutMesh.SceneNodes.push_back(SceneNode);
+    }
+
+    OutMesh.EmbeddedStaticMeshes.clear();
+    OutMesh.EmbeddedStaticMeshes.reserve(ImportScene.StaticMeshes.size());
+    for (const FFBXStaticMeshImportData& StaticImportData : ImportScene.StaticMeshes)
+    {
+        FSkeletalMeshEmbeddedStaticMesh EmbeddedStaticMesh = {};
+        EmbeddedStaticMesh.Name = StaticImportData.Name;
+        EmbeddedStaticMesh.SourceNodeIndex = StaticImportData.SourceNodeIndex;
+        EmbeddedStaticMesh.Vertices = StaticImportData.Vertices;
+        EmbeddedStaticMesh.Indices = StaticImportData.Indices;
+        EmbeddedStaticMesh.Sections = StaticImportData.Sections;
+        EmbeddedStaticMesh.MaterialSlots = StaticImportData.MaterialSlots;
+        EmbeddedStaticMesh.LocalBounds = BuildLocalBounds(StaticImportData);
+
+        OutMesh.EmbeddedStaticMeshes.push_back(EmbeddedStaticMesh);
+    }
+}
+
 void FFBXImporter::TraversalNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene)
 {
     if (!Node)

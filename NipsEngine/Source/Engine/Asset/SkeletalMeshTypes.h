@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Math/Matrix.h"
+#include "Asset/StaticMeshTypes.h"
 #include "Render/Resource/VertexTypes.h"
 #include "Render/Resource/Material.h"
 
@@ -29,12 +30,40 @@ struct FSkeletalMeshMaterialSlot
     TMap<FString, FString> SerializedTextureParamPaths;
 };
 
+struct FSkeletalMeshSceneNode
+{
+    FString Name;
+    int32 ParentIndex = -1;
+    TArray<int32> Children;
+
+    FMatrix LocalTransformMatrix = FMatrix::Identity;
+    FMatrix GlobalTransformMatrix = FMatrix::Identity;
+
+    int32 StaticMeshIndex = -1;
+    int32 SkeletalMeshIndex = -1;
+    int32 BoneIndex = -1;
+};
+
+struct FSkeletalMeshEmbeddedStaticMesh
+{
+    FString Name;
+    int32 SourceNodeIndex = -1;
+
+    TArray<FNormalVertex> Vertices;
+    TArray<uint32> Indices;
+    TArray<FStaticMeshSection> Sections;
+    TArray<FStaticMeshMaterialSlot> MaterialSlots;
+
+    FAABB LocalBounds;
+};
+
 struct FSkeletalMesh
 {
     FString FilePathName;
     FString SkeletonAssetPath;
     FMatrix SourceNodeLocalTransform = FMatrix::Identity;
     FMatrix SourceNodeGlobalTransform = FMatrix::Identity;
+    int32 SourceSceneSkeletalMeshIndex = 0;
 
     TArray<FSkeletalVertex> Vertices;
     TArray<uint32> Indices;
@@ -43,6 +72,8 @@ struct FSkeletalMesh
     TArray<FSkeletalMeshMaterialSlot> Slots;
 
     TArray<FBoneInfo> Bones;
+    TArray<FSkeletalMeshSceneNode> SceneNodes;
+    TArray<FSkeletalMeshEmbeddedStaticMesh> EmbeddedStaticMeshes;
 
     FAABB LocalBounds;
 };

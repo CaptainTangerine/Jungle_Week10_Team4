@@ -2850,6 +2850,7 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
             if (LoadedMeshData != nullptr)
             {
                 LoadedMeshData->SkeletonAssetPath = Path;
+                Importer.AttachSceneDataToSkeletalMesh(ImportScene, MeshIndex, *LoadedMeshData);
             }
         }
 
