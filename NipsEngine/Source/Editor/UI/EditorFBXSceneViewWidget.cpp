@@ -145,18 +145,7 @@ namespace
 
     void RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh)
     {
-        for (FSkeletalMeshMaterialSlot& Slot : Mesh.Slots)
-        {
-            if (Slot.Material == nullptr)
-            {
-                Slot.Material = FResourceManager::Get().GetMaterial(Slot.SlotName);
-            }
-
-            if (Slot.Material == nullptr)
-            {
-                Slot.Material = FResourceManager::Get().GetMaterial("DefaultWhite");
-            }
-        }
+        FResourceManager::Get().RestoreSkeletalMeshSlotMaterials(Mesh);
     }
 
     struct FSkeletalMeshBinaryCacheStats

@@ -36,7 +36,7 @@
 constexpr uint32 STATIC_MESH_BINARY_MAGIC = 0x4853454D; // 'MESH'
 constexpr uint32 STATIC_MESH_BINARY_VERSION = 2;
 constexpr uint32 SKELETAL_MESH_BINARY_MAGIC = 0x484D4B53; // 'SKMH'
-constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 1;
+constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 2;
 
 //	Vailidation Checkers
 constexpr uint32 MAX_STATIC_MESH_VERTEX_COUNT   = 10'000'000;
@@ -48,6 +48,7 @@ constexpr uint32 MAX_SKELETAL_MESH_INDEX_COUNT    = 30'000'000;
 constexpr uint32 MAX_SKELETAL_MESH_SECTION_COUNT  = 100'000;
 constexpr uint32 MAX_SKELETAL_MESH_SLOTNAME_COUNT = 1024;
 constexpr uint32 MAX_SKELETAL_MESH_BONE_COUNT     = 100'000;
+constexpr uint32 MAX_MATERIAL_PARAM_COUNT         = 1024;
 constexpr uint32 MAX_STRING_LENGTH              = 4096;
 constexpr uint64 SKELETAL_MESH_BINARY_HEADER_SIZE = 60;
 
@@ -616,6 +617,266 @@ bool FBinarySerializer::ReadMatrix(std::ifstream& In, FMatrix& OutMatrix) const
     return true;
 }
 
+void FBinarySerializer::WriteMaterialParams(
+    std::ofstream& Out,
+    const TMap<FString, FMaterialParamValue>& Params,
+    const TMap<FString, FString>& TextureParamPaths)
+{
+    WriteUInt32LE(Out, static_cast<uint32>(Params.size()));
+    for (const auto& [ParamName, ParamValue] : Params)
+    {
+        WriteString(Out, ParamName);
+        WriteMaterialParamValue(Out, ParamName, ParamValue, TextureParamPaths);
+    }
+}
+
+bool FBinarySerializer::ReadMaterialParams(
+    std::ifstream& In,
+    TMap<FString, FMaterialParamValue>& OutParams,
+    TMap<FString, FString>& OutTextureParamPaths) const
+{
+    OutParams.clear();
+    OutTextureParamPaths.clear();
+
+    uint32 ParamCount = 0;
+    if (!ReadUInt32LE(In, ParamCount))
+    {
+        return false;
+    }
+
+    if (ParamCount > MAX_MATERIAL_PARAM_COUNT)
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    for (uint32 ParamIndex = 0; ParamIndex < ParamCount; ++ParamIndex)
+    {
+        FString ParamName;
+        FMaterialParamValue ParamValue;
+        FString TexturePath;
+        if (!ReadString(In, ParamName) ||
+            !ReadMaterialParamValue(In, ParamValue, TexturePath))
+        {
+            return false;
+        }
+
+        OutParams[ParamName] = ParamValue;
+        if (ParamValue.Type == EMaterialParamType::Texture)
+        {
+            OutTextureParamPaths[ParamName] = TexturePath;
+        }
+    }
+
+    return In.good();
+}
+
+void FBinarySerializer::WriteMaterialParamValue(
+    std::ofstream& Out,
+    const FString& ParamName,
+    const FMaterialParamValue& ParamValue,
+    const TMap<FString, FString>& TextureParamPaths)
+{
+    WriteUInt32LE(Out, static_cast<uint32>(ParamValue.Type));
+
+    switch (ParamValue.Type)
+    {
+    case EMaterialParamType::Bool:
+        WriteUInt32LE(Out, std::holds_alternative<bool>(ParamValue.Value) && std::get<bool>(ParamValue.Value) ? 1u : 0u);
+        break;
+    case EMaterialParamType::Int:
+        WriteInt32LE(Out, std::holds_alternative<int32>(ParamValue.Value) ? std::get<int32>(ParamValue.Value) : 0);
+        break;
+    case EMaterialParamType::UInt:
+        WriteUInt32LE(Out, std::holds_alternative<uint32>(ParamValue.Value) ? std::get<uint32>(ParamValue.Value) : 0u);
+        break;
+    case EMaterialParamType::Float:
+        WriteFloatLE(Out, std::holds_alternative<float>(ParamValue.Value) ? std::get<float>(ParamValue.Value) : 0.0f);
+        break;
+    case EMaterialParamType::Vector2:
+    {
+        const FVector2 Value = std::holds_alternative<FVector2>(ParamValue.Value)
+            ? std::get<FVector2>(ParamValue.Value)
+            : FVector2();
+        WriteFloatLE(Out, Value.X);
+        WriteFloatLE(Out, Value.Y);
+        break;
+    }
+    case EMaterialParamType::Vector3:
+    {
+        const FVector Value = std::holds_alternative<FVector>(ParamValue.Value)
+            ? std::get<FVector>(ParamValue.Value)
+            : FVector::ZeroVector;
+        WriteFloatLE(Out, Value.X);
+        WriteFloatLE(Out, Value.Y);
+        WriteFloatLE(Out, Value.Z);
+        break;
+    }
+    case EMaterialParamType::Vector4:
+    {
+        const FVector4 Value = std::holds_alternative<FVector4>(ParamValue.Value)
+            ? std::get<FVector4>(ParamValue.Value)
+            : FVector4();
+        WriteFloatLE(Out, Value.X);
+        WriteFloatLE(Out, Value.Y);
+        WriteFloatLE(Out, Value.Z);
+        WriteFloatLE(Out, Value.W);
+        break;
+    }
+    case EMaterialParamType::Matrix4:
+    {
+        const FMatrix Value = std::holds_alternative<FMatrix>(ParamValue.Value)
+            ? std::get<FMatrix>(ParamValue.Value)
+            : FMatrix();
+        WriteMatrix(Out, Value);
+        break;
+    }
+    case EMaterialParamType::Texture:
+    {
+        FString TexturePath;
+        if (std::holds_alternative<UTexture*>(ParamValue.Value))
+        {
+            if (const UTexture* Texture = std::get<UTexture*>(ParamValue.Value))
+            {
+                TexturePath = Texture->GetFilePath();
+            }
+        }
+
+        if (TexturePath.empty())
+        {
+            auto TexturePathIt = TextureParamPaths.find(ParamName);
+            if (TexturePathIt != TextureParamPaths.end())
+            {
+                TexturePath = TexturePathIt->second;
+            }
+        }
+
+        WriteString(Out, TexturePath);
+        break;
+    }
+    }
+}
+
+bool FBinarySerializer::ReadMaterialParamValue(
+    std::ifstream& In,
+    FMaterialParamValue& OutValue,
+    FString& OutTexturePath) const
+{
+    OutTexturePath.clear();
+
+    uint32 RawType = 0;
+    if (!ReadUInt32LE(In, RawType))
+    {
+        return false;
+    }
+
+    if (RawType > static_cast<uint32>(EMaterialParamType::Texture))
+    {
+        In.setstate(std::ios::failbit);
+        return false;
+    }
+
+    const EMaterialParamType ParamType = static_cast<EMaterialParamType>(RawType);
+    switch (ParamType)
+    {
+    case EMaterialParamType::Bool:
+    {
+        uint32 Value = 0;
+        if (!ReadUInt32LE(In, Value))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value != 0);
+        break;
+    }
+    case EMaterialParamType::Int:
+    {
+        int32 Value = 0;
+        if (!ReadInt32LE(In, Value))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::UInt:
+    {
+        uint32 Value = 0;
+        if (!ReadUInt32LE(In, Value))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Float:
+    {
+        float Value = 0.0f;
+        if (!ReadFloatLE(In, Value))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Vector2:
+    {
+        FVector2 Value;
+        if (!ReadFloatLE(In, Value.X) ||
+            !ReadFloatLE(In, Value.Y))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Vector3:
+    {
+        FVector Value;
+        if (!ReadFloatLE(In, Value.X) ||
+            !ReadFloatLE(In, Value.Y) ||
+            !ReadFloatLE(In, Value.Z))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Vector4:
+    {
+        FVector4 Value;
+        if (!ReadFloatLE(In, Value.X) ||
+            !ReadFloatLE(In, Value.Y) ||
+            !ReadFloatLE(In, Value.Z) ||
+            !ReadFloatLE(In, Value.W))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Matrix4:
+    {
+        FMatrix Value;
+        if (!ReadMatrix(In, Value))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(Value);
+        break;
+    }
+    case EMaterialParamType::Texture:
+        if (!ReadString(In, OutTexturePath))
+        {
+            return false;
+        }
+        OutValue = FMaterialParamValue(static_cast<UTexture*>(nullptr));
+        break;
+    }
+
+    return true;
+}
+
 void FBinarySerializer::WriteSkeletalDependencyChunk(
     std::ofstream& Out,
     const FString& SourcePath,
@@ -741,7 +1002,14 @@ void FBinarySerializer::WriteSkeletalStaticGeometryChunk(std::ofstream& Out, con
     WriteUInt32LE(Out, SlotCount);
     for (const FSkeletalMeshMaterialSlot& Slot : Data.Slots)
     {
+        TMap<FString, FMaterialParamValue> MaterialParams = Slot.SerializedMaterialParams;
+        if (Slot.Material != nullptr)
+        {
+            Slot.Material->GatherAllParams(MaterialParams);
+        }
+
         WriteString(Out, Slot.SlotName);
+        WriteMaterialParams(Out, MaterialParams, Slot.SerializedTextureParamPaths);
     }
 
     uint32 VertexCount = static_cast<uint32>(Data.Vertices.size());
@@ -830,7 +1098,8 @@ bool FBinarySerializer::ReadSkeletalStaticGeometryChunk(
     OutData.Slots.resize(ReadSlotCount);
     for (FSkeletalMeshMaterialSlot& Slot : OutData.Slots)
     {
-        if (!ReadString(In, Slot.SlotName))
+        if (!ReadString(In, Slot.SlotName) ||
+            !ReadMaterialParams(In, Slot.SerializedMaterialParams, Slot.SerializedTextureParamPaths))
         {
             return false;
         }

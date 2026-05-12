@@ -2746,6 +2746,64 @@ UStaticMesh* FResourceManager::FindStaticMesh(const FString& Path) const
     return It->second;
 }
 
+void FResourceManager::RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh)
+{
+    UMaterial* DefaultMaterial = GetMaterial("DefaultWhite");
+    UTexture* DefaultWhiteTexture = GetTexture("DefaultWhite");
+    UTexture* DefaultNormalTexture = GetTexture("DefaultNormal");
+
+    for (FSkeletalMeshMaterialSlot& Slot : Mesh.Slots)
+    {
+        if (!Slot.SerializedMaterialParams.empty() && DefaultMaterial != nullptr)
+        {
+            UMaterialInstance* Instance = UMaterialInstance::CreateTransient(DefaultMaterial);
+            Instance->Name = Slot.SlotName.empty() ? FString("SkeletalMeshMaterial") : Slot.SlotName;
+
+            for (const auto& [ParamName, ParamValue] : Slot.SerializedMaterialParams)
+            {
+                if (ParamValue.Type == EMaterialParamType::Texture)
+                {
+                    FString TexturePath;
+                    auto TexturePathIt = Slot.SerializedTextureParamPaths.find(ParamName);
+                    if (TexturePathIt != Slot.SerializedTextureParamPaths.end())
+                    {
+                        TexturePath = TexturePathIt->second;
+                    }
+
+                    UTexture* Texture = nullptr;
+                    if (!TexturePath.empty())
+                    {
+                        Texture = LoadTexture(TexturePath, CachedDevice.Get());
+                    }
+
+                    if (Texture == nullptr)
+                    {
+                        Texture = ParamName == "NormalMap" ? DefaultNormalTexture : DefaultWhiteTexture;
+                    }
+
+                    Instance->SetParam(ParamName, FMaterialParamValue(Texture));
+                    continue;
+                }
+
+                Instance->SetParam(ParamName, ParamValue);
+            }
+
+            Slot.Material = Instance;
+            continue;
+        }
+
+        if (Slot.Material == nullptr)
+        {
+            Slot.Material = GetMaterialInterface(Slot.SlotName);
+        }
+
+        if (Slot.Material == nullptr)
+        {
+            Slot.Material = DefaultMaterial;
+        }
+    }
+}
+
 USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 MeshIndex)
 {
     const std::filesystem::path InputPath(FPaths::ToWide(Path));
@@ -2826,15 +2884,7 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
         return nullptr;
     }
 
-    for (FSkeletalMeshMaterialSlot& Slot : LoadedMeshData->Slots)
-    {
-        Slot.Material = GetMaterial(Slot.SlotName);
-
-        if (Slot.Material == nullptr)
-        {
-            Slot.Material = GetMaterial("DefaultWhite");
-        }
-    }
+    RestoreSkeletalMeshSlotMaterials(*LoadedMeshData);
 
     USkeletalMesh* LoadedMesh = UObjectManager::Get().CreateObject<USkeletalMesh>();
     LoadedMesh->SetMeshData(LoadedMeshData);

@@ -150,6 +150,7 @@ public:
 
     USkeletalMesh* LoadSkeletalMesh(const FString& Path, int32 MeshIndex = 0);
     USkeletalMesh* FindSkeletalMesh(const FString& Path) const;
+    void RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh);
 
     ID3D11SamplerState* GetOrCreateSamplerState(ESamplerType Type, ID3D11Device* Device = nullptr);
     ID3D11DepthStencilState* GetOrCreateDepthStencilState(EDepthStencilType Type, ID3D11Device* Device = nullptr);
