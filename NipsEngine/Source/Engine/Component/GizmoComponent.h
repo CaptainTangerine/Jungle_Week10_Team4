@@ -3,6 +3,7 @@
 #include "PrimitiveComponent.h"
 #include "Core/CoreTypes.h"
 #include "Core/Containers/Array.h"
+#include "Math/Quat.h"
 
 class AActor;
 class UMaterialInterface;
@@ -45,6 +46,8 @@ private:
     bool bIsHolding = false;
     bool bIsWorldSpace = true;
     bool bPressedOnHandle = false;
+    bool bUseManualTransform = false;
+    FQuat ManualRotation;
 
     FGizmoDelta PendingDelta;
 
@@ -114,6 +117,7 @@ public:
 
     //Skeletal Mesh Preview Related
     void ShowAtLocation(const FVector& Location);
+    void ShowAtTransform(const FVector& Location, const FQuat& Rotation);
     FGizmoDelta ConsumePendingDelta();
 
 private:

@@ -4,6 +4,7 @@
 #include "Engine/Viewport/ViewportCamera.h"
 #include "Runtime/ViewportRect.h"
 #include "Engine/Component/GizmoComponent.h"
+#include "Render/Common/ViewTypes.h"
 
 class USkinnedMeshComponent;
 class UPrimitiveComponent;
@@ -34,6 +35,9 @@ public:
     bool GetShowAxis() const { return bShowAxis; }
     void SetShowGrid(bool bIn) { bShowGrid = bIn; }
     void SetShowAxis(bool bIn) { bShowAxis = bIn; }
+
+    EViewMode GetViewMode() const { return ViewMode; }
+    void SetViewMode(EViewMode InMode) { ViewMode = InMode; }
 
     void Tick(float DeltaTime) override;
     void BuildSceneView(FSceneView& OutView) const override;
@@ -80,6 +84,7 @@ private:
 
     bool bShowGrid = true;
     bool bShowAxis = false;
+    EViewMode ViewMode = EViewMode::Lit;
 
     //For Gizmo
     UGizmoComponent* PreviewGizmo = nullptr;

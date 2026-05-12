@@ -63,6 +63,19 @@ namespace
         LineBatcher.AddLine(Base1, End, Color);
         LineBatcher.AddLine(Base2, End, Color);
     }
+
+    FQuat MakeRotationFromWorldMatrix(const FMatrix& WorldMatrix)
+    {
+        FMatrix RotationMatrix = FMatrix::Identity;
+        RotationMatrix.SetAxes(
+            WorldMatrix.GetUnitAxis(EAxis::X),
+            WorldMatrix.GetUnitAxis(EAxis::Y),
+            WorldMatrix.GetUnitAxis(EAxis::Z));
+
+        FQuat Rotation(RotationMatrix);
+        Rotation.Normalize();
+        return Rotation;
+    }
 }
 
 void FFBXPreviewViewportClient::Initialize(FWindowsWindow* InWindow)
@@ -206,7 +219,7 @@ void FFBXPreviewViewportClient::BuildSceneView(FSceneView& OutView) const
     OutView.CameraOrthoHeight = Camera.GetOrthoHeight();
     OutView.CameraFrustum    = Camera.GetFrustum();
     OutView.ViewRect         = ViewRect;
-    OutView.ViewMode         = EViewMode::Unlit;
+    OutView.ViewMode         = ViewMode;
 }
 
 void FFBXPreviewViewportClient::CreatePreviewGizmo()
@@ -280,10 +293,11 @@ void FFBXPreviewViewportClient::SelectBone(USkinnedMeshComponent* InSkinnedMesh,
     const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
     
     const FVector BoneWorldLocation = BoneWorldTransform.TransformPosition(FVector::ZeroVector);
+    const FQuat BoneWorldRotation = MakeRotationFromWorldMatrix(BoneWorldTransform);
     
     if (PreviewGizmo)
     {
-        PreviewGizmo->ShowAtLocation(BoneWorldLocation);
+        PreviewGizmo->ShowAtTransform(BoneWorldLocation, BoneWorldRotation);
         PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
     }
 }
@@ -676,7 +690,9 @@ void FFBXPreviewViewportClient::SyncPreviewGizmoToSelectedBone()
     }
 
     const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
-    PreviewGizmo->SetWorldLocation(BoneWorldTransform.TransformPosition(FVector::ZeroVector));
+    PreviewGizmo->ShowAtTransform(
+        BoneWorldTransform.TransformPosition(FVector::ZeroVector),
+        MakeRotationFromWorldMatrix(BoneWorldTransform));
     PreviewGizmo->SetVisibility(true);
     PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
 }

@@ -875,18 +875,20 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
 
     // --- Show Flags ---
     ImGui::Separator();
-    ImGui::TextDisabled("Show Flags");
-    ImGui::SameLine();
 
     if (EditorEngine)
     {
         FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
 
-        bool bGrid = FBXClient.GetShowGrid();
-        bool bAxis = FBXClient.GetShowAxis();
-        if (ImGui::Checkbox("Grid", &bGrid))   { FBXClient.SetShowGrid(bGrid); }
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Axis", &bAxis))   { FBXClient.SetShowAxis(bAxis); }
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::BeginCombo("##FBXShowFlags", "Show Flags"))
+        {
+            bool bGrid = FBXClient.GetShowGrid();
+            bool bAxis = FBXClient.GetShowAxis();
+            if (ImGui::Checkbox("Grid", &bGrid)) { FBXClient.SetShowGrid(bGrid); }
+            if (ImGui::Checkbox("Axis", &bAxis)) { FBXClient.SetShowAxis(bAxis); }
+            ImGui::EndCombo();
+        }
         ImGui::SameLine();
 
         if (UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo())
@@ -910,9 +912,51 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
             }
             ImGui::SameLine();
         }
+
+        // --- View Mode ---
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+        ImGui::TextDisabled("View Mode");
+        ImGui::SameLine();
+
+        static constexpr EViewMode ViewModes[] = {
+            EViewMode::Lit,
+            EViewMode::Unlit,
+            EViewMode::Wireframe,
+            EViewMode::SceneDepth,
+            EViewMode::WorldNormal,
+        };
+        static constexpr const char* ViewModeLabels[] = {
+            "Lit",
+            "Unlit",
+            "Wireframe",
+            "Scene Depth",
+            "World Normal",
+        };
+
+        EViewMode CurrentMode = FBXClient.GetViewMode();
+        const char* CurrentLabel = "Lit";
+        for (int32 i = 0; i < static_cast<int32>(IM_ARRAYSIZE(ViewModes)); ++i)
+        {
+            if (ViewModes[i] == CurrentMode) { CurrentLabel = ViewModeLabels[i]; break; }
+        }
+
+        ImGui::SetNextItemWidth(110.0f);
+        if (ImGui::BeginCombo("##FBXViewMode", CurrentLabel))
+        {
+            for (int32 i = 0; i < static_cast<int32>(IM_ARRAYSIZE(ViewModes)); ++i)
+            {
+                const bool bSel = (ViewModes[i] == CurrentMode);
+                if (ImGui::Selectable(ViewModeLabels[i], bSel))
+                    FBXClient.SetViewMode(ViewModes[i]);
+                if (bSel)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
     }
 
-    ImGui::SameLine();
     ImGui::TextDisabled("|");
     ImGui::SameLine();
     ImGui::TextDisabled("Import");

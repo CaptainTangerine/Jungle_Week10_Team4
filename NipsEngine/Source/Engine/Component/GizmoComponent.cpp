@@ -253,6 +253,7 @@ void UGizmoComponent::SetTarget(AActor* NewTarget)
     }
 
     TargetActor = NewTarget;
+    bUseManualTransform = false;
 
     SetWorldLocation(TargetActor->GetActorLocation());
     UpdateGizmoTransform();
@@ -416,21 +417,34 @@ void UGizmoComponent::UpdateGizmoTransform()
         SetWorldLocation(TargetActor->GetActorLocation());
         ActorRot = TargetActor->GetActorRotation();
     }
+    else if (bUseManualTransform)
+    {
+        SetRelativeRotationQuat(ManualRotation);
+    }
 
     switch (CurMode)
     {
     case EGizmoMode::Scale:
-        SetRelativeRotation(ActorRot);
+        if (!bUseManualTransform)
+        {
+            SetRelativeRotation(ActorRot);
+        }
         GizmoMeshData = &FEditorMeshLibrary::Get().GetScaleGizmo();
         break;
 
     case EGizmoMode::Rotate:
-        SetRelativeRotation(bIsWorldSpace ? FVector() : ActorRot);
+        if (!bUseManualTransform)
+        {
+            SetRelativeRotation(bIsWorldSpace ? FVector() : ActorRot);
+        }
         GizmoMeshData = &FEditorMeshLibrary::Get().GetRotationGizmo();
         break;
 
     case EGizmoMode::Translate:
-        SetRelativeRotation(bIsWorldSpace ? FVector() : ActorRot);
+        if (!bUseManualTransform)
+        {
+            SetRelativeRotation(bIsWorldSpace ? FVector() : ActorRot);
+        }
         GizmoMeshData = &FEditorMeshLibrary::Get().GetTranslationGizmo();
         break;
     }
@@ -465,6 +479,7 @@ void UGizmoComponent::Deactivate()
 {
     TargetActor = nullptr;
     AllSelectedActors = nullptr;
+    bUseManualTransform = false;
     SetVisibility(false);
     SelectedAxis = -1;
 }
@@ -490,6 +505,18 @@ void UGizmoComponent::ShowAtLocation(const FVector& Location)
 {
     TargetActor = nullptr;
     AllSelectedActors = nullptr;
+    bUseManualTransform = false;
+    SetWorldLocation(Location);
+    UpdateGizmoTransform();
+    SetVisibility(true);
+}
+
+void UGizmoComponent::ShowAtTransform(const FVector& Location, const FQuat& Rotation)
+{
+    TargetActor = nullptr;
+    AllSelectedActors = nullptr;
+    bUseManualTransform = true;
+    ManualRotation = Rotation.GetNormalized();
     SetWorldLocation(Location);
     UpdateGizmoTransform();
     SetVisibility(true);
