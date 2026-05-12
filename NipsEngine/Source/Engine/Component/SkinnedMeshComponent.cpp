@@ -450,7 +450,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     FMatrix DebugHeadOriginalLocal = FMatrix::Identity;
     const double TimeSeconds = FPlatformTime::Seconds();
     constexpr float DegToRad = MathUtil::PI / 180.0f;
-    const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 5) * DegToRad;
+    const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 0.2f) * DegToRad;
 
     for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
     {
@@ -467,8 +467,7 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
         DebugHeadBoneIndex = BoneIdx;
         DebugHeadOriginalLocal = CurrentBoneLocalTransforms[BoneIdx];
-        CurrentBoneLocalTransforms[BoneIdx] =
-            DebugHeadOriginalLocal * FMatrix::MakeRotationX(DebugYawRadians);
+        CurrentBoneLocalTransforms[BoneIdx] =DebugHeadOriginalLocal * FMatrix::MakeRotationX(DebugYawRadians);
         break;
     }
 
@@ -536,12 +535,6 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
         DstVertex.Color = SrcVertex.Color;
         DstVertex.UVs = SrcVertex.UVs;
-    }
-
-    if (DebugHeadBoneIndex >= 0)
-    {
-        CurrentBoneLocalTransforms[DebugHeadBoneIndex] = DebugHeadOriginalLocal;
-        RebuildCurrentBoneGlobalTransforms(Bones);
     }
 
     MarkBoundsDirty();

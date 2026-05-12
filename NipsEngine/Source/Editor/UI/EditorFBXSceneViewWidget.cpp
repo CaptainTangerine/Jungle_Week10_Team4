@@ -955,8 +955,8 @@ void FEditorFBXSceneViewWidget::RenderViewport()
 
             char VertText[64];
             char TriText[64];
-            snprintf(VertText, sizeof(VertText), "버텍스 : %d", TotalVertices);
-            snprintf(TriText,  sizeof(TriText),  "트라이앵글  : %d", TotalTriangles);
+            snprintf(VertText, sizeof(VertText), "Vertex : %d", TotalVertices);
+            snprintf(TriText,  sizeof(TriText),  "Triangle  : %d", TotalTriangles);
 
             const float     Pad  = 8.0f;
             const float     LineH = ImGui::GetTextLineHeight();
