@@ -442,16 +442,16 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
     {
         const FString& BoneName = Bones[BoneIdx].Name;
         const bool bIsNeckBone =
-            BoneName.find("Neck") != FString::npos ||
-            BoneName.find("neck") != FString::npos ||
-            BoneName.find("NECK") != FString::npos;
+            BoneName.find("Head") != FString::npos ||
+            BoneName.find("head") != FString::npos ||
+            BoneName.find("HEAD") != FString::npos;
 
         if (!bIsNeckBone)
         {
             continue;
         }
 
-        const FMatrix OffsetTransform = FMatrix::MakeRotationZ(DebugYawRadians);
+        const FMatrix OffsetTransform = FMatrix::MakeRotationX(DebugYawRadians);
         CurrentBoneLocalTransforms[BoneIdx] = CurrentBoneLocalTransforms[BoneIdx] * OffsetTransform;
         break;
     }
