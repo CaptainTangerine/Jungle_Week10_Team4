@@ -26,6 +26,7 @@ public:
     void SetViewportRect(int32 InX, int32 InY, int32 InWidth, int32 InHeight);
     void SetHovered(bool bInHovered) { bHovered = bInHovered; }
     bool IsHovered() const { return bHovered; }
+    bool IsInputCaptured() const { return bInputCaptured; }
     const FViewportRect& GetViewportRect() const { return ViewRect; }
 
     FViewportCamera& GetCamera() { return Camera; }

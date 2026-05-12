@@ -108,6 +108,15 @@ void FEditorViewportLayout::UpdateHoverStates()
         return;
     }
 
+    if (GuiState.IsViewportInputBlockedAt(MouseX, MouseY))
+    {
+        for (int32 i = 0; i < MaxViewports; ++i)
+        {
+            GetViewportState(i).bHovered = false;
+        }
+        return;
+    }
+
     // Find Active Viewport 
     int32 ActiveOpViewport = -1;
     for (int32 i = 0; i < MaxViewports; ++i)

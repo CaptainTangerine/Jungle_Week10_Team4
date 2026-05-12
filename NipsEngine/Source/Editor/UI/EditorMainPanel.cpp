@@ -162,6 +162,11 @@ void FEditorMainPanel::Render(float DeltaTime)
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    FGuiInputState& GuiState = InputSystem::Get().GetGuiInputState();
+    GuiState.bViewportInputBlocked = false;
+    GuiState.bViewportInputBlockCapturesMouse = false;
+    GuiState.ViewportInputBlockRect = FViewportRect();
+
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
     ToolbarWidget.Render(DeltaTime);

@@ -12,6 +12,7 @@
 #include "Editor/EditorEngine.h"
 #include "Editor/EditorRenderPipeline.h"
 #include "Editor/Viewport/FBXPreviewViewportClient.h"
+#include "Engine/Input/InputSystem.h"
 #include "Engine/Slate/SlateUtils.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/World.h"
@@ -787,6 +788,15 @@ void FEditorFBXSceneViewWidget::RenderViewport()
         W,
         H);
     FBXClient.SetHovered(bHovered);
+
+    //땜빵코드 이후에 제거 필요 Week10
+    if (bHovered || FBXClient.IsInputCaptured())
+    {
+        FGuiInputState& GuiState = InputSystem::Get().GetGuiInputState();
+        GuiState.bViewportInputBlocked = true;
+        GuiState.bViewportInputBlockCapturesMouse = FBXClient.IsInputCaptured();
+        GuiState.ViewportInputBlockRect = FBXClient.GetViewportRect();
+    }
 
     // 렌더 파이프라인에서 이번 프레임에 렌더된 SRV를 가져와 표시
     const FEditorRenderPipeline* Pipeline = EditorEngine->GetEditorRenderPipeline();

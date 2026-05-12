@@ -11,7 +11,16 @@ struct FGuiInputState
     bool          bViewportHostVisible = false;
     FViewportRect ViewportHostRect;
 
+    bool          bViewportInputBlocked = false;
+    bool          bViewportInputBlockCapturesMouse = false;
+    FViewportRect ViewportInputBlockRect;
+
     bool IsInViewportHost(int32 X, int32 Y) const { return bViewportHostVisible && ViewportHostRect.Contains(X, Y); }
+    bool IsViewportInputBlockedAt(int32 X, int32 Y) const
+    {
+        return bViewportInputBlocked &&
+            (bViewportInputBlockCapturesMouse || ViewportInputBlockRect.Contains(X, Y));
+    }
 };
 
 class InputSystem : public TSingleton<InputSystem>
