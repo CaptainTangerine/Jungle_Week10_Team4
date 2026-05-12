@@ -1,7 +1,7 @@
 ﻿#include "SkinnedMeshComponent.h"
 
-#include "Core/ResourceManager.h"
 #include "Core/PlatformTime.h"
+#include "Core/ResourceManager.h"
 #include "Render/Resource/Material.h"
 
 #include <cfloat>
@@ -424,20 +424,43 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
         InitializeSkinnedVerticesFromBindPose();
     }
 
-    const bool bNeedsLocalPoseInit = CurrentBoneLocalTransforms.size() != Bones.size();
-    CurrentBoneLocalTransforms.resize(Bones.size());
-    CurrentBoneGlobalMeshTransforms.resize(Bones.size());
-
-    if (bNeedsLocalPoseInit)
+    if (CurrentBoneLocalTransforms.size() != Bones.size())
     {
-        // 현재 프레임의 Bone Local Trnasform 구성
+        CurrentBoneLocalTransforms.resize(Bones.size());
         for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
         {
             CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
         }
     }
 
-    // 변환된 Local로 GloabalTrnasform 계산
+    // 테스트용 Head 흔들림은 현재 포즈를 덮지 않고 skinning 계산에만 임시 반영한다.
+    int32 DebugHeadBoneIndex = -1;
+    FMatrix DebugHeadOriginalLocal = FMatrix::Identity;
+    const double TimeSeconds = FPlatformTime::Seconds();
+    constexpr float DegToRad = MathUtil::PI / 180.0f;
+    const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 5) * DegToRad;
+
+    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+    {
+        const FString& BoneName = Bones[BoneIdx].Name;
+        const bool bIsHeadBone =
+            BoneName.find("Head") != FString::npos ||
+            BoneName.find("head") != FString::npos ||
+            BoneName.find("HEAD") != FString::npos;
+
+        if (!bIsHeadBone)
+        {
+            continue;
+        }
+
+        DebugHeadBoneIndex = BoneIdx;
+        DebugHeadOriginalLocal = CurrentBoneLocalTransforms[BoneIdx];
+        CurrentBoneLocalTransforms[BoneIdx] =
+            DebugHeadOriginalLocal * FMatrix::MakeRotationX(DebugYawRadians);
+        break;
+    }
+
+    // 현재 Bone Local Transform으로 Global Transform을 계산한다.
     // 인덱스 순서가 부모부터 시작된다는 보장이 없다고 판단하여 DFS로 순회하면서 보장
     RebuildCurrentBoneGlobalTransforms(Bones);
 
@@ -499,6 +522,12 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
 
         DstVertex.Color = SrcVertex.Color;
         DstVertex.UVs = SrcVertex.UVs;
+    }
+
+    if (DebugHeadBoneIndex >= 0)
+    {
+        CurrentBoneLocalTransforms[DebugHeadBoneIndex] = DebugHeadOriginalLocal;
+        RebuildCurrentBoneGlobalTransforms(Bones);
     }
 
     MarkBoundsDirty();

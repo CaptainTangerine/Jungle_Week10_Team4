@@ -6,6 +6,8 @@
 #include "Engine/Slate/SlateUtils.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Math/Utils.h"
+#include "GameFramework/World.h"
+#include "Component/PrimitiveComponent.h"
 #include "Render/LineBatcher.h"
 
 #include <algorithm>
@@ -425,7 +427,13 @@ void FFBXPreviewViewportClient::TickPreviewGizmoInteraction()
     if (bHovered && Input.GetKeyDown(VK_LBUTTON))
     {
         FHitResult HitResult{};
-        PreviewGizmo->SetPressedOnHandle(PreviewGizmo->RaycastMesh(Ray, HitResult));
+        const bool bHitGizmo = PreviewGizmo->RaycastMesh(Ray, HitResult);
+        PreviewGizmo->SetPressedOnHandle(bHitGizmo);
+        if (!bHitGizmo && !RaycastPreviewWorld(Ray))
+        {
+            ClearBoneSelection();
+            return;
+        }
     }
 
     if (Input.GetLeftDragging())
@@ -445,6 +453,36 @@ void FFBXPreviewViewportClient::TickPreviewGizmoInteraction()
     {
         PreviewGizmo->DragEnd();
     }
+}
+
+bool FFBXPreviewViewportClient::RaycastPreviewWorld(const FRay& Ray) const
+{
+    if (!PreviewWorld)
+    {
+        return false;
+    }
+
+    FWorldSpatialIndex::FPrimitiveRayQueryScratch QueryScratch;
+    TArray<UPrimitiveComponent*> CandidatePrimitives;
+    TArray<float> CandidateTs;
+    PreviewWorld->GetSpatialIndex().RayQueryPrimitives(Ray, CandidatePrimitives, CandidateTs, QueryScratch);
+
+    for (int32 CandidateIndex = 0; CandidateIndex < static_cast<int32>(CandidatePrimitives.size()); ++CandidateIndex)
+    {
+        UPrimitiveComponent* Primitive = CandidatePrimitives[CandidateIndex];
+        if (!Primitive || !Primitive->IsVisible())
+        {
+            continue;
+        }
+
+        FHitResult HitResult{};
+        if (Primitive->Raycast(Ray, HitResult))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void FFBXPreviewViewportClient::ApplyPreviewGizmoDelta(const FGizmoDelta& Delta)

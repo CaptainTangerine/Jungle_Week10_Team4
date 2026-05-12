@@ -10,6 +10,7 @@ class  UWorld;
 class FLineBatcher;
 struct FSceneView;
 struct FGizmoDelta;
+struct FRay;
 struct FViewportMouseEvent;
 
 class FFBXPreviewViewportClient : public FViewportClient
@@ -54,6 +55,7 @@ private:
     void ZoomCamera(float Notches);
     void MoveCamera(float DeltaTime);
     void TickPreviewGizmoInteraction();
+    bool RaycastPreviewWorld(const FRay& Ray) const;
     void ApplyPreviewGizmoDelta(const FGizmoDelta& Delta);
     void ApplySelectedBoneTranslation(const FVector& WorldDelta);
     void ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle);
