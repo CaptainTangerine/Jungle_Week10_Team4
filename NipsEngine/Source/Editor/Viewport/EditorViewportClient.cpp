@@ -298,6 +298,13 @@ void FEditorViewportClient::TickInteraction(float DeltaTime)
         return;
     }
 
+    FGizmoDelta GizmoDelta = Gizmo->ConsumePendingDelta();
+    if (GizmoDelta.Mode != EGizmoMode::End)
+    {
+        ApplyGizmoDeltaToSelection(GizmoDelta);
+        Gizmo->UpdateGizmoTransform();
+    }
+
     POINT MousePoint = InputSystem::Get().GetMousePos();
     if (bBoxSelecting)
     {
@@ -352,6 +359,83 @@ void FEditorViewportClient::TickInteraction(float DeltaTime)
         {
             bBoxSelecting = false;
         }
+    }
+}
+
+void FEditorViewportClient::ApplyGizmoDeltaToSelection(const FGizmoDelta& Delta)
+{
+    if (!SelectionManager)
+    {
+        return;
+    }
+
+    const TArray<AActor*>& SelectedActors = SelectionManager->GetSelectedActors();
+    if (SelectedActors.empty())
+    {
+        return;
+    }
+
+    switch (Delta.Mode)
+    {
+    case EGizmoMode::Translate:
+        for (AActor* Actor : SelectedActors)
+        {
+            if (Actor)
+            {
+                Actor->AddActorWorldOffset(Delta.WorldDelta);
+            }
+        }
+        break;
+
+    case EGizmoMode::Rotate:
+    {
+        const FQuat DeltaQuat(Delta.Axis, Delta.Amount);
+        for (AActor* Actor : SelectedActors)
+        {
+            if (!Actor || !Actor->GetRootComponent())
+            {
+                continue;
+            }
+
+            const FQuat CurrentQuat = FQuat::MakeFromEuler(Actor->GetActorRotation());
+            Actor->SetActorRotation((CurrentQuat * DeltaQuat).Euler());
+        }
+        break;
+    }
+
+    case EGizmoMode::Scale:
+        for (AActor* Actor : SelectedActors)
+        {
+            if (!Actor)
+            {
+                continue;
+            }
+
+            FVector NewScale = Actor->GetActorScale();
+            switch (Delta.AxisIdx)
+            {
+            case 0:
+                NewScale.X += Delta.Amount;
+                break;
+            case 1:
+                NewScale.Y += Delta.Amount;
+                break;
+            case 2:
+                NewScale.Z += Delta.Amount;
+                break;
+            default:
+                break;
+            }
+
+            NewScale.X = std::max(NewScale.X, 0.001f);
+            NewScale.Y = std::max(NewScale.Y, 0.001f);
+            NewScale.Z = std::max(NewScale.Z, 0.001f);
+            Actor->SetActorScale(NewScale);
+        }
+        break;
+
+    default:
+        break;
     }
 }
 

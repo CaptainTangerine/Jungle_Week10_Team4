@@ -3,11 +3,13 @@
 #include "Runtime/ViewportClient.h"
 #include "Engine/Viewport/ViewportCamera.h"
 #include "Runtime/ViewportRect.h"
+#include "Engine/Component/GizmoComponent.h"
 
 class USkinnedMeshComponent;
-class UGizmoComponent;
 class  UWorld;
+class FLineBatcher;
 struct FSceneView;
+struct FGizmoDelta;
 struct FViewportMouseEvent;
 
 class FFBXPreviewViewportClient : public FViewportClient
@@ -41,6 +43,8 @@ public:
     void ClearBoneSelection();
     void SelectBone(USkinnedMeshComponent* InSkinnedMesh, int32 InBoneIndex);
     UGizmoComponent* GetPreviewGizmo() const { return PreviewGizmo; }
+    void SetPreviewGizmoMode(EGizmoMode NewMode);
+    void AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const;
 
 private:
     void SyncAnglesFromCamera();
@@ -49,6 +53,12 @@ private:
     void PanCamera(float DeltaX, float DeltaY);
     void ZoomCamera(float Notches);
     void MoveCamera(float DeltaTime);
+    void TickPreviewGizmoInteraction();
+    void ApplyPreviewGizmoDelta(const FGizmoDelta& Delta);
+    void ApplySelectedBoneTranslation(const FVector& WorldDelta);
+    void ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle);
+    void ApplySelectedBoneScale(int32 AxisIndex, float ScaleDelta);
+    void SyncPreviewGizmoToSelectedBone();
 
 private:
     UWorld* PreviewWorld = nullptr;

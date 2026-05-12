@@ -480,6 +480,14 @@ uint32 FLineBatcher::GetLineCount() const
     return static_cast<uint32>(Indices.size() / 2);
 }
 
+void FLineBatcher::SetDepthStencilType(EDepthStencilType Type)
+{
+    if (UMaterial* LineMaterial = Cast<UMaterial>(Material))
+    {
+        LineMaterial->DepthStencilType = Type;
+    }
+}
+
 void FLineBatcher::AddSpotLight(const FVector& Position, const FVector& Direction, const FVector& DirectionRight, float AttenuationRadius,
     float InnerConeAngle, float OuterConeAngle)
 {

@@ -6,6 +6,7 @@
 #include "Engine/Slate/SlateUtils.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Math/Utils.h"
+#include "Render/LineBatcher.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,6 +15,53 @@
 #include "Component/SkinnedMeshComponent.h"
 #include "Object/Object.h"
 
+namespace
+{
+    void AddBonePyramid(FLineBatcher& LineBatcher, const FVector& Start, const FVector& End, const FVector4& Color)
+    {
+        const FVector Segment = End - Start;
+        const float SegmentLength = Segment.Size();
+        if (SegmentLength <= 1.0e-4f)
+        {
+            return;
+        }
+
+        const FVector BoneDirection = Segment / SegmentLength;
+        FVector BaseAxisA = FVector::ZeroVector;
+        FVector BaseAxisB = FVector::ZeroVector;
+        BoneDirection.FindBestAxisVectors(BaseAxisA, BaseAxisB);
+
+        const float BaseRadius = std::max(SegmentLength * 0.08f, 0.01f);
+        const float BaseOffset = std::min(SegmentLength * 0.18f, BaseRadius * 4.0f);
+        const FVector BaseCenter = Start + BoneDirection * BaseOffset;
+
+        constexpr float TriangleAngle0 = 0.0f;
+        constexpr float TriangleAngle1 = MathUtil::TwoPi / 3.0f;
+        constexpr float TriangleAngle2 = MathUtil::TwoPi * 2.0f / 3.0f;
+
+        const auto MakeBasePoint = [&](float Angle)
+        {
+            return BaseCenter +
+                (BaseAxisA * std::cos(Angle) + BaseAxisB * std::sin(Angle)) * BaseRadius;
+        };
+
+        const FVector Base0 = MakeBasePoint(TriangleAngle0);
+        const FVector Base1 = MakeBasePoint(TriangleAngle1);
+        const FVector Base2 = MakeBasePoint(TriangleAngle2);
+
+        LineBatcher.AddLine(Start, Base0, Color);
+        LineBatcher.AddLine(Start, Base1, Color);
+        LineBatcher.AddLine(Start, Base2, Color);
+
+        LineBatcher.AddLine(Base0, Base1, Color);
+        LineBatcher.AddLine(Base1, Base2, Color);
+        LineBatcher.AddLine(Base2, Base0, Color);
+
+        LineBatcher.AddLine(Base0, End, Color);
+        LineBatcher.AddLine(Base1, End, Color);
+        LineBatcher.AddLine(Base2, End, Color);
+    }
+}
 
 void FFBXPreviewViewportClient::Initialize(FWindowsWindow* InWindow)
 {
@@ -70,6 +118,11 @@ void FFBXPreviewViewportClient::Tick(float DeltaTime)
         return;
     }
 
+    if (bHovered && PreviewGizmo && Input.GetKeyDown(VK_SPACE))
+    {
+        PreviewGizmo->SetNextMode();
+    }
+
     if (bInputCaptured && Input.GetKey(VK_RBUTTON))
     {
         MoveCamera(DeltaTime);
@@ -78,6 +131,16 @@ void FFBXPreviewViewportClient::Tick(float DeltaTime)
     const float DeltaX = static_cast<float>(Input.MouseDeltaX());
     const float DeltaY = static_cast<float>(Input.MouseDeltaY());
     const bool bAltDown = Input.GetKey(VK_MENU);
+
+    TickPreviewGizmoInteraction();
+    if (PreviewGizmo)
+    {
+        const FGizmoDelta GizmoDelta = PreviewGizmo->ConsumePendingDelta();
+        if (GizmoDelta.Mode != EGizmoMode::End)
+        {
+            ApplyPreviewGizmoDelta(GizmoDelta);
+        }
+    }
 
     if (bInputCaptured && Input.GetKeyDown(VK_RBUTTON))
     {
@@ -187,6 +250,83 @@ void FFBXPreviewViewportClient::SelectBone(USkinnedMeshComponent* InSkinnedMesh,
     }
 }
 
+void FFBXPreviewViewportClient::SetPreviewGizmoMode(EGizmoMode NewMode)
+{
+    if (!PreviewGizmo)
+    {
+        return;
+    }
+
+    PreviewGizmo->UpdateGizmoMode(NewMode);
+    SyncPreviewGizmoToSelectedBone();
+}
+
+void FFBXPreviewViewportClient::AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const
+{
+    if (!SelectedSkinnedMeshComponent || SelectedBoneIndex < 0)
+    {
+        return;
+    }
+
+    USkeletalMesh* SkeletalMesh = SelectedSkinnedMeshComponent->GetSkeletalMesh();
+    if (!SkeletalMesh)
+    {
+        return;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMesh->GetBones();
+    if (SelectedBoneIndex >= static_cast<int32>(Bones.size()))
+    {
+        return;
+    }
+
+    auto GetBoneWorldLocation = [this](int32 BoneIndex, FVector& OutWorldLocation) -> bool
+    {
+        FMatrix BoneLocalToMesh = FMatrix::Identity;
+        if (!SelectedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(BoneIndex, BoneLocalToMesh))
+        {
+            return false;
+        }
+
+        const FMatrix BoneLocalToWorld = BoneLocalToMesh * SelectedSkinnedMeshComponent->GetWorldMatrix();
+        OutWorldLocation = BoneLocalToWorld.TransformPosition(FVector::ZeroVector);
+        return true;
+    };
+
+    FVector SelectedBoneWorldLocation = FVector::ZeroVector;
+    if (!GetBoneWorldLocation(SelectedBoneIndex, SelectedBoneWorldLocation))
+    {
+        return;
+    }
+
+    const FVector4 ParentLineColor = FVector4(1.0f, 0.82f, 0.18f, 1.0f);
+    const FVector4 ChildLineColor = FVector4(0.15f, 0.72f, 1.0f, 1.0f);
+
+    const int32 ParentBoneIndex = Bones[SelectedBoneIndex].ParentIndex;
+    if (ParentBoneIndex >= 0 && ParentBoneIndex < static_cast<int32>(Bones.size()))
+    {
+        FVector ParentBoneWorldLocation = FVector::ZeroVector;
+        if (GetBoneWorldLocation(ParentBoneIndex, ParentBoneWorldLocation))
+        {
+            AddBonePyramid(LineBatcher, ParentBoneWorldLocation, SelectedBoneWorldLocation, ParentLineColor);
+        }
+    }
+
+    for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Bones.size()); ++BoneIndex)
+    {
+        if (Bones[BoneIndex].ParentIndex != SelectedBoneIndex)
+        {
+            continue;
+        }
+
+        FVector ChildBoneWorldLocation = FVector::ZeroVector;
+        if (GetBoneWorldLocation(BoneIndex, ChildBoneWorldLocation))
+        {
+            AddBonePyramid(LineBatcher, SelectedBoneWorldLocation, ChildBoneWorldLocation, ChildLineColor);
+        }
+    }
+}
+
 void FFBXPreviewViewportClient::SyncAnglesFromCamera()
 {
     const FVector Forward = Camera.GetForwardVector().GetSafeNormal();
@@ -251,6 +391,208 @@ void FFBXPreviewViewportClient::PanCamera(float DeltaX, float DeltaY)
 
     Camera.SetLocation(Camera.GetLocation() + Delta);
     OrbitTarget += Delta;
+}
+
+void FFBXPreviewViewportClient::TickPreviewGizmoInteraction()
+{
+    if (!PreviewGizmo || !PreviewGizmo->IsVisible() || (!bHovered && !bInputCaptured))
+    {
+        return;
+    }
+
+    InputSystem& Input = InputSystem::Get();
+    if (Input.GetKey(VK_MENU))
+    {
+        return;
+    }
+
+    POINT MousePoint = Input.GetMousePos();
+    if (Window)
+    {
+        MousePoint = Window->ScreenToClientPoint(MousePoint);
+    }
+
+    const float LocalX = static_cast<float>(MousePoint.x - ViewRect.X);
+    const float LocalY = static_cast<float>(MousePoint.y - ViewRect.Y);
+    const FRay Ray = Camera.DeprojectScreenToWorld(LocalX, LocalY, WindowWidth, WindowHeight);
+
+    if (bHovered && Input.MouseMoved())
+    {
+        FHitResult HoverHit{};
+        PreviewGizmo->RaycastMesh(Ray, HoverHit);
+    }
+
+    if (bHovered && Input.GetKeyDown(VK_LBUTTON))
+    {
+        FHitResult HitResult{};
+        PreviewGizmo->SetPressedOnHandle(PreviewGizmo->RaycastMesh(Ray, HitResult));
+    }
+
+    if (Input.GetLeftDragging())
+    {
+        if (PreviewGizmo->IsPressedOnHandle() && !PreviewGizmo->IsHolding())
+        {
+            PreviewGizmo->SetHolding(true);
+        }
+
+        if (PreviewGizmo->IsHolding())
+        {
+            PreviewGizmo->UpdateDrag(Ray);
+        }
+    }
+
+    if (Input.GetLeftDragEnd() || Input.GetKeyUp(VK_LBUTTON))
+    {
+        PreviewGizmo->DragEnd();
+    }
+}
+
+void FFBXPreviewViewportClient::ApplyPreviewGizmoDelta(const FGizmoDelta& Delta)
+{
+    switch (Delta.Mode)
+    {
+    case EGizmoMode::Translate:
+        ApplySelectedBoneTranslation(Delta.WorldDelta);
+        break;
+    case EGizmoMode::Rotate:
+        ApplySelectedBoneRotation(Delta.Axis, Delta.Amount);
+        break;
+    case EGizmoMode::Scale:
+        ApplySelectedBoneScale(Delta.AxisIdx, Delta.Amount);
+        break;
+    default:
+        break;
+    }
+
+    SyncPreviewGizmoToSelectedBone();
+}
+
+void FFBXPreviewViewportClient::ApplySelectedBoneTranslation(const FVector& WorldDelta)
+{
+    if (!SelectedSkinnedMeshComponent || SelectedBoneIndex < 0)
+    {
+        return;
+    }
+
+    FMatrix BoneLocal = FMatrix::Identity;
+    if (!SelectedSkinnedMeshComponent->GetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal))
+    {
+        return;
+    }
+
+    FVector MeshSpaceDelta =
+        SelectedSkinnedMeshComponent->GetWorldMatrix().GetInverse().TransformVector(WorldDelta);
+    FVector ParentBoneSpaceDelta = MeshSpaceDelta;
+
+    if (USkeletalMesh* SkeletalMesh = SelectedSkinnedMeshComponent->GetSkeletalMesh())
+    {
+        const TArray<FBoneInfo>& Bones = SkeletalMesh->GetBones();
+        if (SelectedBoneIndex >= 0 && SelectedBoneIndex < static_cast<int32>(Bones.size()))
+        {
+            const int32 ParentIndex = Bones[SelectedBoneIndex].ParentIndex;
+            if (ParentIndex >= 0 && ParentIndex < static_cast<int32>(Bones.size()))
+            {
+                FMatrix ParentBoneLocalToMesh = FMatrix::Identity;
+                if (SelectedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(ParentIndex, ParentBoneLocalToMesh))
+                {
+                    ParentBoneSpaceDelta = ParentBoneLocalToMesh.GetInverse().TransformVector(MeshSpaceDelta);
+                }
+            }
+        }
+    }
+
+    BoneLocal.SetTranslation(BoneLocal.GetTranslation() + ParentBoneSpaceDelta);
+    SelectedSkinnedMeshComponent->SetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal);
+}
+
+void FFBXPreviewViewportClient::ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle)
+{
+    if (!SelectedSkinnedMeshComponent || SelectedBoneIndex < 0)
+    {
+        return;
+    }
+
+    FMatrix BoneLocal = FMatrix::Identity;
+    if (!SelectedSkinnedMeshComponent->GetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal))
+    {
+        return;
+    }
+
+    FVector MeshSpaceAxis = SelectedSkinnedMeshComponent->GetWorldMatrix().GetInverse().TransformVector(WorldAxis);
+    FVector ParentBoneSpaceAxis = MeshSpaceAxis;
+
+    if (USkeletalMesh* SkeletalMesh = SelectedSkinnedMeshComponent->GetSkeletalMesh())
+    {
+        const TArray<FBoneInfo>& Bones = SkeletalMesh->GetBones();
+        if (SelectedBoneIndex >= 0 && SelectedBoneIndex < static_cast<int32>(Bones.size()))
+        {
+            const int32 ParentIndex = Bones[SelectedBoneIndex].ParentIndex;
+            if (ParentIndex >= 0 && ParentIndex < static_cast<int32>(Bones.size()))
+            {
+                FMatrix ParentBoneLocalToMesh = FMatrix::Identity;
+                if (SelectedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(ParentIndex, ParentBoneLocalToMesh))
+                {
+                    ParentBoneSpaceAxis = ParentBoneLocalToMesh.GetInverse().TransformVector(MeshSpaceAxis);
+                }
+            }
+        }
+    }
+
+    BoneLocal = BoneLocal * FMatrix::MakeRotationAxis(ParentBoneSpaceAxis, Angle);
+    SelectedSkinnedMeshComponent->SetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal);
+}
+
+void FFBXPreviewViewportClient::ApplySelectedBoneScale(int32 AxisIndex, float ScaleDelta)
+{
+    if (!SelectedSkinnedMeshComponent || SelectedBoneIndex < 0)
+    {
+        return;
+    }
+
+    FMatrix BoneLocal = FMatrix::Identity;
+    if (!SelectedSkinnedMeshComponent->GetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal))
+    {
+        return;
+    }
+
+    const float ScaleValue = std::max(1.0f + ScaleDelta, 0.001f);
+    FVector Scale(1.0f, 1.0f, 1.0f);
+    switch (AxisIndex)
+    {
+    case 0:
+        Scale.X = ScaleValue;
+        break;
+    case 1:
+        Scale.Y = ScaleValue;
+        break;
+    case 2:
+        Scale.Z = ScaleValue;
+        break;
+    default:
+        return;
+    }
+
+    BoneLocal = BoneLocal * FMatrix::MakeScale(Scale);
+    SelectedSkinnedMeshComponent->SetCurrentBoneLocalTransform(SelectedBoneIndex, BoneLocal);
+}
+
+void FFBXPreviewViewportClient::SyncPreviewGizmoToSelectedBone()
+{
+    if (!PreviewGizmo || !SelectedSkinnedMeshComponent || SelectedBoneIndex < 0)
+    {
+        return;
+    }
+
+    FMatrix BoneMeshTransform = FMatrix::Identity;
+    if (!SelectedSkinnedMeshComponent->GetCurrentBoneGlobalMeshTransform(SelectedBoneIndex, BoneMeshTransform))
+    {
+        return;
+    }
+
+    const FMatrix BoneWorldTransform = BoneMeshTransform * SelectedSkinnedMeshComponent->GetWorldMatrix();
+    PreviewGizmo->SetWorldLocation(BoneWorldTransform.TransformPosition(FVector::ZeroVector));
+    PreviewGizmo->SetVisibility(true);
+    PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
 }
 
 void FFBXPreviewViewportClient::ZoomCamera(float Notches)

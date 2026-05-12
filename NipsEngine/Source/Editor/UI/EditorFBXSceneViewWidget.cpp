@@ -3,6 +3,7 @@
 #include "Asset/BinarySerializer.h"
 #include "Asset/SkeletalMesh.h"
 #include "Component/SceneComponent.h"
+#include "Component/GizmoComponent.h"
 #include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
@@ -20,6 +21,7 @@
 #include "Render/Renderer/Renderer.h"
 
 #include <commdlg.h>
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 
@@ -425,26 +427,21 @@ void FEditorFBXSceneViewWidget::RenderViewport()
 {
     if (!EditorEngine) { return; }
 
-    // 이 Child 창의 실제 픽셀 크기를 다음 프레임 렌더 해상도로 예약
     const ImVec2 AvailSize = ImGui::GetContentRegionAvail();
-    const int32 W = static_cast<int32>(AvailSize.x);
-    const int32 H = static_cast<int32>(AvailSize.y);
+    const int32 W = std::max(1, static_cast<int32>(AvailSize.x));
+    const int32 H = std::max(1, static_cast<int32>(AvailSize.y));
+    const ImVec2 ImageSize(static_cast<float>(W), static_cast<float>(H));
 
     FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
     const ImVec2 ImagePos = ImGui::GetCursorScreenPos();
-    POINT ViewportPos =
-    {
-        static_cast<LONG>(ImagePos.x),
-        static_cast<LONG>(ImagePos.y)
-    };
-    if (FBXClient.GetWindow())
-    {
-        ViewportPos = FBXClient.GetWindow()->ScreenToClientPoint(ViewportPos);
-    }
 
-    const ImVec2 ImageEnd(ImagePos.x + AvailSize.x, ImagePos.y + AvailSize.y);
+    const ImVec2 ImageEnd(ImagePos.x + ImageSize.x, ImagePos.y + ImageSize.y);
     const bool bHovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(ImagePos, ImageEnd);
-    FBXClient.SetViewportRect(ViewportPos.x, ViewportPos.y, W, H);
+    FBXClient.SetViewportRect(
+        static_cast<int32>(ImagePos.x),
+        static_cast<int32>(ImagePos.y),
+        W,
+        H);
     FBXClient.SetHovered(bHovered);
 
     // 렌더 파이프라인에서 이번 프레임에 렌더된 SRV를 가져와 표시
@@ -457,7 +454,7 @@ void FEditorFBXSceneViewWidget::RenderViewport()
         ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
         DrawList->AddCallback(SetOpaqueBlendStateCallback, DeviceContext);
-        ImGui::Image(reinterpret_cast<ImTextureID>(SRV), AvailSize);
+        ImGui::Image(reinterpret_cast<ImTextureID>(SRV), ImageSize);
         DrawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     }
     else
@@ -515,6 +512,28 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         ImGui::SameLine();
         if (ImGui::Checkbox("Axis", &bAxis))   { FBXClient.SetShowAxis(bAxis); }
         ImGui::SameLine();
+
+        if (UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo())
+        {
+            ImGui::TextDisabled("|");
+            ImGui::SameLine();
+            int32 GizmoMode = static_cast<int32>(PreviewGizmo->GetGizmoMode());
+            if (ImGui::RadioButton("Translate", &GizmoMode, static_cast<int32>(EGizmoMode::Translate)))
+            {
+                FBXClient.SetPreviewGizmoMode(EGizmoMode::Translate);
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Rotate", &GizmoMode, static_cast<int32>(EGizmoMode::Rotate)))
+            {
+                FBXClient.SetPreviewGizmoMode(EGizmoMode::Rotate);
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Scale", &GizmoMode, static_cast<int32>(EGizmoMode::Scale)))
+            {
+                FBXClient.SetPreviewGizmoMode(EGizmoMode::Scale);
+            }
+            ImGui::SameLine();
+        }
     }
 
     ImGui::SameLine();
