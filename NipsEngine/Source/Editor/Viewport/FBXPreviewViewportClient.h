@@ -6,6 +6,7 @@
 #include "Engine/Component/GizmoComponent.h"
 
 class USkinnedMeshComponent;
+class UPrimitiveComponent;
 class  UWorld;
 class FLineBatcher;
 struct FSceneView;
@@ -47,6 +48,11 @@ public:
     void SetPreviewGizmoMode(EGizmoMode NewMode);
     void AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const;
 
+    void RegisterPickableComponent(UPrimitiveComponent* Component, int32 NodeIndex);
+    void ClearPickableComponents();
+    int32 ConsumePickedNodeIndex();
+    UPrimitiveComponent* GetSelectedComponent() const { return SelectedPickedComponent; }
+
 private:
     void SyncAnglesFromCamera();
     void UpdateCameraRotation();
@@ -55,7 +61,7 @@ private:
     void ZoomCamera(float Notches);
     void MoveCamera(float DeltaTime);
     void TickPreviewGizmoInteraction();
-    bool RaycastPreviewWorld(const FRay& Ray) const;
+    bool RaycastPreviewWorld(const FRay& Ray);
     void ApplyPreviewGizmoDelta(const FGizmoDelta& Delta);
     void ApplySelectedBoneTranslation(const FVector& WorldDelta);
     void ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle);
@@ -79,5 +85,10 @@ private:
     UGizmoComponent* PreviewGizmo = nullptr;
     USkinnedMeshComponent* SelectedSkinnedMeshComponent = nullptr;
     int32 SelectedBoneIndex = -1;
+
+    TArray<UPrimitiveComponent*> PickableComponents;
+    TArray<int32>                PickableNodeIndices;
+    int32                        PickedNodeIndex = -1;
+    UPrimitiveComponent*         SelectedPickedComponent = nullptr;
 
 };

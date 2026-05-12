@@ -129,6 +129,52 @@ void FOverlayRenderCollector::CollectSelection(
     }
 }
 
+bool FOverlayRenderCollector::CollectPickedComponent(UPrimitiveComponent* Component, FRenderBus& RenderBus)
+{
+    if (!Component || !Component->IsVisible()) return false;
+    if (!Component->SupportsOutline()) return false;
+    if (MeshBufferManager == nullptr) return false;
+
+    FMeshBuffer* MeshBuffer = nullptr;
+    if (Component->GetPrimitiveType() == EPrimitiveType::EPT_StaticMesh)
+    {
+        auto* StaticMeshComp = static_cast<UStaticMeshComponent*>(Component);
+        MeshBuffer = MeshBufferManager->GetStaticMeshBuffer(StaticMeshComp->GetStaticMesh());
+    }
+    else if (Component->GetPrimitiveType() == EPrimitiveType::EPT_SkinnedMesh)
+    {
+        auto* SkinnedMeshComp = static_cast<USkinnedMeshComponent*>(Component);
+        const USkeletalMesh* SkeletalMesh = SkinnedMeshComp->GetSkeletalMesh();
+        if (!SkeletalMesh || !SkeletalMesh->HasValidMeshData()) return false;
+        MeshBuffer = &SkinnedMeshComp->GetSkinnedMeshRenderResource().GetMeshBuffer();
+    }
+
+    if (!MeshBuffer || !MeshBuffer->IsValid()) return false;
+
+    FRenderCommand MaskCmd{};
+    MaskCmd.Type = ERenderCommandType::SelectionMask;
+    MaskCmd.MeshBuffer = MeshBuffer;
+    MaskCmd.PerObjectConstants = FPerObjectConstants(Component->GetWorldMatrix());
+    MaskCmd.SectionIndexStart = 0;
+    MaskCmd.SectionIndexCount = MeshBuffer->GetIndexBuffer().GetIndexCount();
+    RenderBus.AddCommand(ERenderPass::SelectionMask, MaskCmd);
+
+    FRenderCommand PostProcessCmd{};
+    PostProcessCmd.Type = ERenderCommandType::PostProcessOutline;
+    PostProcessCmd.Material = FResourceManager::Get().GetMaterial("OutlineMaterial");
+    UMaterial* OutlineMaterial = Cast<UMaterial>(PostProcessCmd.Material);
+    if (OutlineMaterial)
+    {
+        OutlineMaterial->SetVector2("OutlineViewportSize", RenderBus.GetViewportSize());
+        OutlineMaterial->SetVector2("OutlineViewportOrigin", RenderBus.GetViewportOrigin());
+        OutlineMaterial->DepthStencilType = EDepthStencilType::Default;
+        OutlineMaterial->RasterizerType = ERasterizerType::SolidBackCull;
+        OutlineMaterial->BlendType = EBlendType::AlphaBlend;
+    }
+    RenderBus.AddCommand(ERenderPass::PostProcessOutline, PostProcessCmd);
+    return true;
+}
+
 void FOverlayRenderCollector::CollectGrid(
     float GridSpacing,
     int32 GridHalfLineCount,

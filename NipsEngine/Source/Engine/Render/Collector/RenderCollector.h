@@ -68,6 +68,7 @@ private:
     // ────── Sub Collects ─────────────────────────────────────────────────────
 public: 
     void CollectSelection(const TArray<AActor*>& SelectedActors, const FShowFlags& ShowFlags, EViewMode ViewMode, FRenderBus& RenderBus);
+    bool CollectPickedComponent(UPrimitiveComponent* Component, FRenderBus& RenderBus);
     void CollectGizmo(UGizmoComponent* Gizmo, const FShowFlags& ShowFlags, FRenderBus& RenderBus, bool bIsActiveOperation);
     void CollectGrid(float GridSpacing, int32 GridHalfLineCount, FRenderBus& RenderBus, bool bOrthographic = false, const FGridRenderSettings& GridRenderSettings = MakeDefaultGridRenderSettings());
 

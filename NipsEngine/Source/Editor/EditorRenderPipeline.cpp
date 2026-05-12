@@ -213,9 +213,18 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     Renderer.GetDebugRingBatcher().Clear();
     FLineBatcher& DebugLineBatcher = Renderer.GetDebugLineBatcher();
     DebugLineBatcher.SetDepthStencilType(EDepthStencilType::NoDepth);
+
     Collector.SetLineBatcher(&Renderer.GetDebugLineBatcher());
     Collector.SetRingBatcher(&Renderer.GetDebugRingBatcher());
     Collector.CollectWorld(FBXWorld, FBXShowFlags, SceneView.ViewMode, Bus, &SceneView.CameraFrustum);
+
+    // 피킹된 컴포넌트에 아웃라인 렌더링
+    UPrimitiveComponent* PickedComp = FBXClient.GetSelectedComponent();
+    if (PickedComp)
+    {
+        Collector.CollectPickedComponent(PickedComp, Bus);
+    }
+
     FBXClient.AddSelectedBoneDebugLines(DebugLineBatcher);
     UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo();
     if (PreviewGizmo)

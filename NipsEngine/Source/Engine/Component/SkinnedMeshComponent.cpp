@@ -256,7 +256,19 @@ void USkinnedMeshComponent::UpdateWorldAABB() const
         return;
     }
 
-    const FAABB& LocalBounds = SkeletalMeshAsset->GetLocalBounds();
+    FAABB LocalBounds;
+    if (!SkinnedRenderResource.SkinnedVertices.empty())
+    {
+        for (const FNormalVertex& Vertex : SkinnedRenderResource.SkinnedVertices)
+        {
+            LocalBounds.Expand(Vertex.Position);
+        }
+    }
+    else
+    {
+        LocalBounds = SkeletalMeshAsset->GetLocalBounds();
+    }
+
     if (!LocalBounds.IsValid())
     {
         bBoundsDirty = false;
@@ -728,6 +740,7 @@ void USkinnedMeshComponent::ReleaseDynamicSkinResources()
 void USkinnedMeshComponent::MarkBoundsDirty()
 {
     bBoundsDirty = true;
+    NotifySpatialIndexDirty();
 }
 
 void USkinnedMeshComponent::MarkRenderStateDirty()

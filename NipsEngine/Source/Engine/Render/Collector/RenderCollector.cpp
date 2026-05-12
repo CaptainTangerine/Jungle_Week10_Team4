@@ -336,6 +336,11 @@ void FRenderCollector::CollectSelection(const TArray<AActor*>& SelectedActors, c
     OverlayRenderCollector.CollectSelection(SelectedActors, ShowFlags, ViewMode, RenderBus, LineBatcher);
 }
 
+bool FRenderCollector::CollectPickedComponent(UPrimitiveComponent* Component, FRenderBus& RenderBus)
+{
+    return OverlayRenderCollector.CollectPickedComponent(Component, RenderBus);
+}
+
 void FRenderCollector::CollectGrid(
     float GridSpacing,
     int32 GridHalfLineCount,
