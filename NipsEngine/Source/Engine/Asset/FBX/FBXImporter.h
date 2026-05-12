@@ -16,6 +16,7 @@ struct FFBXImportNode
 
     int32 StaticMeshIndex = -1;
     int32 SkeletalMeshIndex = -1;
+    int32 BoneIndex = -1;
 };
 
 // Gemotry 정보 관리
@@ -34,6 +35,8 @@ struct FFBXSkeletalMeshImportData
 {
     FString Name;
     int32 SourceNodeIndex = -1;
+    FMatrix SourceNodeLocalTransformMatrix = FMatrix::Identity;
+    FMatrix SourceNodeGlobalTransformMatrix = FMatrix::Identity;
 
     TArray<FSkeletalVertex> Vertices;
     TArray<uint32> Indices;

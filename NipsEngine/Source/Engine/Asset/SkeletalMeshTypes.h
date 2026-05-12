@@ -33,6 +33,8 @@ struct FSkeletalMesh
 {
     FString FilePathName;
     FString SkeletonAssetPath;
+    FMatrix SourceNodeLocalTransform = FMatrix::Identity;
+    FMatrix SourceNodeGlobalTransform = FMatrix::Identity;
 
     TArray<FSkeletalVertex> Vertices;
     TArray<uint32> Indices;
