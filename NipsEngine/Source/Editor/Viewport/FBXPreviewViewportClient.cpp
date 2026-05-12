@@ -15,6 +15,7 @@
 
 #include "Component/GizmoComponent.h"
 #include "Component/SkinnedMeshComponent.h"
+#include "Component/StaticMeshComponent.h"
 #include "Object/Object.h"
 
 namespace
@@ -263,7 +264,8 @@ void FFBXPreviewViewportClient::ClearBoneSelection()
 {
     SelectedBoneIndex = -1;
     SelectedSkinnedMeshComponent = nullptr;
-    
+    SelectedStaticMeshComponent = nullptr;
+
     if (PreviewGizmo)
     {
         PreviewGizmo->Deactivate();
@@ -310,7 +312,15 @@ void FFBXPreviewViewportClient::SetPreviewGizmoMode(EGizmoMode NewMode)
     }
 
     PreviewGizmo->UpdateGizmoMode(NewMode);
-    SyncPreviewGizmoToSelectedBone();
+
+    if (SelectedStaticMeshComponent)
+    {
+        SyncGizmoToStaticMesh();
+    }
+    else
+    {
+        SyncPreviewGizmoToSelectedBone();
+    }
 }
 
 void FFBXPreviewViewportClient::AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const
@@ -549,22 +559,42 @@ bool FFBXPreviewViewportClient::RaycastPreviewWorld(const FRay& Ray)
 
 void FFBXPreviewViewportClient::ApplyPreviewGizmoDelta(const FGizmoDelta& Delta)
 {
-    switch (Delta.Mode)
+    if (SelectedStaticMeshComponent)
     {
-    case EGizmoMode::Translate:
-        ApplySelectedBoneTranslation(Delta.WorldDelta);
-        break;
-    case EGizmoMode::Rotate:
-        ApplySelectedBoneRotation(Delta.Axis, Delta.Amount);
-        break;
-    case EGizmoMode::Scale:
-        ApplySelectedBoneScale(Delta.AxisIdx, Delta.Amount);
-        break;
-    default:
-        break;
+        switch (Delta.Mode)
+        {
+        case EGizmoMode::Translate:
+            ApplyStaticMeshTranslation(Delta.WorldDelta);
+            break;
+        case EGizmoMode::Rotate:
+            ApplyStaticMeshRotation(Delta.Axis, Delta.Amount);
+            break;
+        case EGizmoMode::Scale:
+            ApplyStaticMeshScale(Delta.AxisIdx, Delta.Amount);
+            break;
+        default:
+            break;
+        }
+        SyncGizmoToStaticMesh();
     }
-
-    SyncPreviewGizmoToSelectedBone();
+    else
+    {
+        switch (Delta.Mode)
+        {
+        case EGizmoMode::Translate:
+            ApplySelectedBoneTranslation(Delta.WorldDelta);
+            break;
+        case EGizmoMode::Rotate:
+            ApplySelectedBoneRotation(Delta.Axis, Delta.Amount);
+            break;
+        case EGizmoMode::Scale:
+            ApplySelectedBoneScale(Delta.AxisIdx, Delta.Amount);
+            break;
+        default:
+            break;
+        }
+        SyncPreviewGizmoToSelectedBone();
+    }
 }
 
 void FFBXPreviewViewportClient::ApplySelectedBoneTranslation(const FVector& WorldDelta)
@@ -695,6 +725,73 @@ void FFBXPreviewViewportClient::SyncPreviewGizmoToSelectedBone()
         MakeRotationFromWorldMatrix(BoneWorldTransform));
     PreviewGizmo->SetVisibility(true);
     PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
+}
+
+void FFBXPreviewViewportClient::SelectStaticMesh(UStaticMeshComponent* InStaticMesh)
+{
+    SelectedBoneIndex = -1;
+    SelectedSkinnedMeshComponent = nullptr;
+    SelectedStaticMeshComponent = InStaticMesh;
+
+    if (!SelectedStaticMeshComponent)
+    {
+        if (PreviewGizmo) PreviewGizmo->Deactivate();
+        return;
+    }
+
+    if (!PreviewGizmo) CreatePreviewGizmo();
+
+    SyncGizmoToStaticMesh();
+}
+
+void FFBXPreviewViewportClient::SyncGizmoToStaticMesh()
+{
+    if (!PreviewGizmo || !SelectedStaticMeshComponent)
+    {
+        return;
+    }
+
+    const FMatrix& WorldMatrix = SelectedStaticMeshComponent->GetWorldMatrix();
+    const FVector WorldPos = WorldMatrix.TransformPosition(FVector::ZeroVector);
+    const FQuat WorldRot = MakeRotationFromWorldMatrix(WorldMatrix);
+
+    PreviewGizmo->ShowAtTransform(WorldPos, WorldRot);
+    PreviewGizmo->SetVisibility(true);
+    PreviewGizmo->ApplyScreenSpaceScaling(Camera.GetLocation());
+}
+
+void FFBXPreviewViewportClient::ApplyStaticMeshTranslation(const FVector& WorldDelta)
+{
+    if (!SelectedStaticMeshComponent) return;
+    SelectedStaticMeshComponent->AddWorldOffset(WorldDelta);
+}
+
+void FFBXPreviewViewportClient::ApplyStaticMeshRotation(const FVector& WorldAxis, float Angle)
+{
+    if (!SelectedStaticMeshComponent) return;
+
+    FMatrix RelMatrix = SelectedStaticMeshComponent->GetRelativeMatrix();
+    RelMatrix = RelMatrix * FMatrix::MakeRotationAxis(WorldAxis, Angle);
+    SelectedStaticMeshComponent->SetRelativeMatrix(RelMatrix);
+}
+
+void FFBXPreviewViewportClient::ApplyStaticMeshScale(int32 AxisIndex, float ScaleDelta)
+{
+    if (!SelectedStaticMeshComponent) return;
+
+    const float ScaleValue = std::max(1.0f + ScaleDelta, 0.001f);
+    FVector Scale(1.0f, 1.0f, 1.0f);
+    switch (AxisIndex)
+    {
+    case 0: Scale.X = ScaleValue; break;
+    case 1: Scale.Y = ScaleValue; break;
+    case 2: Scale.Z = ScaleValue; break;
+    default: return;
+    }
+
+    FMatrix RelMatrix = SelectedStaticMeshComponent->GetRelativeMatrix();
+    RelMatrix = RelMatrix * FMatrix::MakeScale(Scale);
+    SelectedStaticMeshComponent->SetRelativeMatrix(RelMatrix);
 }
 
 void FFBXPreviewViewportClient::ZoomCamera(float Notches)
