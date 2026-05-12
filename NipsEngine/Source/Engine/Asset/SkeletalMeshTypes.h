@@ -25,6 +25,8 @@ struct FSkeletalMeshMaterialSlot
 {
     FString SlotName;
     UMaterialInterface* Material = nullptr;
+    TMap<FString, FMaterialParamValue> SerializedMaterialParams;
+    TMap<FString, FString> SerializedTextureParamPaths;
 };
 
 struct FSkeletalMesh

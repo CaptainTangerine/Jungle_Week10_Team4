@@ -2,7 +2,9 @@
 
 #include "Core/CoreTypes.h"
 #include "Core/Containers/Array.h"
+#include "Core/Containers/Map.h"
 #include "Core/Containers/String.h"
+#include "Render/Resource/Material.h"
 
 #include <fstream>
 
@@ -29,7 +31,7 @@ struct FStaticMeshBinaryHeader
 struct FSkeletalMeshBinaryHeader
 {
     uint32 MagicNumber = 0x484D4B53;
-    uint32 Version = 1;
+    uint32 Version = 2;
     uint32 VertexCount = 0;
     uint32 IndexCount = 0;
     uint32 SectionCount = 0;
@@ -88,6 +90,23 @@ private:
 
     void WriteMatrix(std::ofstream& Out, const FMatrix& Matrix);
     bool ReadMatrix(std::ifstream& In, FMatrix& OutMatrix) const;
+    void WriteMaterialParams(
+        std::ofstream& Out,
+        const TMap<FString, FMaterialParamValue>& Params,
+        const TMap<FString, FString>& TextureParamPaths);
+    bool ReadMaterialParams(
+        std::ifstream& In,
+        TMap<FString, FMaterialParamValue>& OutParams,
+        TMap<FString, FString>& OutTextureParamPaths) const;
+    void WriteMaterialParamValue(
+        std::ofstream& Out,
+        const FString& ParamName,
+        const FMaterialParamValue& ParamValue,
+        const TMap<FString, FString>& TextureParamPaths);
+    bool ReadMaterialParamValue(
+        std::ifstream& In,
+        FMaterialParamValue& OutValue,
+        FString& OutTexturePath) const;
 
     void WriteSkeletalDependencyChunk(std::ofstream& Out, const FString& SourcePath, const FSkeletalMesh& Data);
     bool ReadSkeletalDependencyChunk(std::ifstream& In, FSkeletalMesh& OutData, uint32 BoneCount) const;
