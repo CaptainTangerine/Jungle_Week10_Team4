@@ -994,7 +994,9 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         PreviewSkinnedMeshComponents.clear();
         if (EditorEngine)
         {
-            EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+            FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
+            FBXClient.ClearBoneSelection();
+            FBXClient.ClearPickableComponents();
             EditorEngine->ResetFBXPreviewWorld();
         }
         StatusMessage = "No FBX loaded.";
@@ -1300,6 +1302,19 @@ void FEditorFBXSceneViewWidget::SelectRootBoneForNode(int32 NodeIndex)
     {
         SelectedSkeletalMeshIndex = -1;
         SelectedBoneIndex = -1;
+
+        // Static mesh 노드인 경우 기즈모를 해당 컴포넌트에 표시
+        if (Node.StaticMeshIndex >= 0)
+        {
+            FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
+            UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(FBXClient.GetSelectedComponent());
+            if (StaticMeshComp)
+            {
+                FBXClient.SelectStaticMesh(StaticMeshComp);
+                return;
+            }
+        }
+
         EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
         return;
     }

@@ -7,6 +7,7 @@
 #include "Render/Common/ViewTypes.h"
 
 class USkinnedMeshComponent;
+class UStaticMeshComponent;
 class UPrimitiveComponent;
 class  UWorld;
 class FLineBatcher;
@@ -48,6 +49,7 @@ public:
 
     void ClearBoneSelection();
     void SelectBone(USkinnedMeshComponent* InSkinnedMesh, int32 InBoneIndex);
+    void SelectStaticMesh(UStaticMeshComponent* InStaticMesh);
     UGizmoComponent* GetPreviewGizmo() const { return PreviewGizmo; }
     void SetPreviewGizmoMode(EGizmoMode NewMode);
     void AddSelectedBoneDebugLines(FLineBatcher& LineBatcher) const;
@@ -71,6 +73,10 @@ private:
     void ApplySelectedBoneRotation(const FVector& WorldAxis, float Angle);
     void ApplySelectedBoneScale(int32 AxisIndex, float ScaleDelta);
     void SyncPreviewGizmoToSelectedBone();
+    void ApplyStaticMeshTranslation(const FVector& WorldDelta);
+    void ApplyStaticMeshRotation(const FVector& WorldAxis, float Angle);
+    void ApplyStaticMeshScale(int32 AxisIndex, float ScaleDelta);
+    void SyncGizmoToStaticMesh();
 
 private:
     UWorld* PreviewWorld = nullptr;
@@ -90,6 +96,7 @@ private:
     UGizmoComponent* PreviewGizmo = nullptr;
     USkinnedMeshComponent* SelectedSkinnedMeshComponent = nullptr;
     int32 SelectedBoneIndex = -1;
+    UStaticMeshComponent* SelectedStaticMeshComponent = nullptr;
 
     TArray<UPrimitiveComponent*> PickableComponents;
     TArray<int32>                PickableNodeIndices;
