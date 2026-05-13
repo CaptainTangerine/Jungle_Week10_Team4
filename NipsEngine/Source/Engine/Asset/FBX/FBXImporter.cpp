@@ -91,7 +91,7 @@ FFBXImportScene FFBXImporter::Import(const FString& Path, const FFBXImportOption
     TraversalNode(RootNode, -1, ImportScene);
     if (ImportOptions.bImportSkinnedMeshesAsStatic)
     {
-        BuildGroupedSkinnedStaticMeshes(ImportScene);
+        BuildBakedSceneStaticMesh(ImportScene);
     }
     else
     {
@@ -125,6 +125,7 @@ FSkeletalMesh* FFBXImporter::CreateSkeletalMeshFromtImportData(const FFBXSkeleta
     Mesh->Sections = ImportData.Sections;
     Mesh->Slots = ImportData.MaterialSlots;
     Mesh->Bones = ImportData.Bones;
+    Mesh->SourceNodeIndex = ImportData.SourceNodeIndex;
     Mesh->SourceNodeLocalTransform = ImportData.SourceNodeLocalTransformMatrix;
     Mesh->SourceNodeGlobalTransform = ImportData.SourceNodeGlobalTransformMatrix;
     Mesh->LocalBounds = BuildLocalBounds(ImportData);
@@ -447,6 +448,12 @@ void FFBXImporter::BuildGroupedSkeletalMeshes(OUT FFBXImportScene& OutImportScen
         const int32 SkeletalMeshIndex = static_cast<int32>(OutImportScene.SkeletalMeshes.size());
         OutImportScene.SkeletalMeshes.push_back(SkeletalMeshData);
 
+        if (SkeletalMeshData.SourceNodeIndex >= 0 &&
+            SkeletalMeshData.SourceNodeIndex < static_cast<int32>(OutImportScene.Nodes.size()))
+        {
+            OutImportScene.Nodes[SkeletalMeshData.SourceNodeIndex].SkeletalMeshIndex = SkeletalMeshIndex;
+        }
+
         for (const FPendingSkinnedMeshNode& MeshNode : Group)
         {
             if (MeshNode.SceneNodeIndex >= 0 &&
@@ -515,6 +522,130 @@ void FFBXImporter::BuildGroupedSkinnedStaticMeshes(OUT FFBXImportScene& OutImpor
         {
             OutImportScene.Nodes[StaticMeshData.SourceNodeIndex].StaticMeshIndex = StaticMeshIndex;
         }
+    }
+}
+
+void FFBXImporter::BuildBakedSceneStaticMesh(OUT FFBXImportScene& OutImportScene)
+{
+    if (OutImportScene.Nodes.empty())
+    {
+        return;
+    }
+
+    const int32 BakedSourceNodeIndex = 0;
+    const FMatrix BakedRootGlobal = OutImportScene.Nodes[BakedSourceNodeIndex].GlobalTransformMatrix;
+    const FMatrix BakedRootGlobalInverse = BakedRootGlobal.GetInverse();
+
+    const TArray<FFBXStaticMeshImportData> ExistingStaticMeshes = OutImportScene.StaticMeshes;
+
+    FFBXStaticMeshImportData BakedMesh = {};
+    BakedMesh.SourceNodeIndex = BakedSourceNodeIndex;
+    BakedMesh.Name = OutImportScene.Nodes[BakedSourceNodeIndex].Name.empty()
+        ? FString("BakedSceneStaticMesh")
+        : OutImportScene.Nodes[BakedSourceNodeIndex].Name + FString("_Static");
+
+    for (const FFBXStaticMeshImportData& StaticMeshData : ExistingStaticMeshes)
+    {
+        if (StaticMeshData.Vertices.empty() || StaticMeshData.Indices.empty())
+        {
+            continue;
+        }
+
+        FMatrix StaticLocalToBakedRoot = FMatrix::Identity;
+        if (StaticMeshData.SourceNodeIndex >= 0 &&
+            StaticMeshData.SourceNodeIndex < static_cast<int32>(OutImportScene.Nodes.size()))
+        {
+            StaticLocalToBakedRoot =
+                OutImportScene.Nodes[StaticMeshData.SourceNodeIndex].GlobalTransformMatrix * BakedRootGlobalInverse;
+        }
+
+        FFBXMeshRawData RawData = {};
+        RawData.Name = StaticMeshData.Name;
+        RawData.SourceNodeIndex = StaticMeshData.SourceNodeIndex;
+        RawData.Vertices = StaticMeshData.Vertices;
+        RawData.Indices = StaticMeshData.Indices;
+        RawData.Sections = StaticMeshData.Sections;
+        RawData.MaterialSlots = StaticMeshData.MaterialSlots;
+        AppendRawDataToStaticMesh(RawData, StaticLocalToBakedRoot, BakedMesh);
+    }
+
+    for (const FPendingSkinnedMeshNode& MeshNode : PendingSkinnedMeshNodes)
+    {
+        if (!MeshNode.Node || !MeshNode.Mesh)
+        {
+            continue;
+        }
+
+        FFBXMeshRawData RawData = {};
+        RawData.SourceNodeIndex = MeshNode.SceneNodeIndex;
+        if (!BuildMeshRawData(MeshNode.Node, MeshNode.Mesh, RawData))
+        {
+            continue;
+        }
+
+        const FMatrix MeshGlobal = ConvertFbxMatrix(MeshNode.Node->EvaluateGlobalTransform());
+        const FMatrix MeshLocalToBakedRoot = MeshGlobal * BakedRootGlobalInverse;
+        AppendRawDataToStaticMesh(RawData, MeshLocalToBakedRoot, BakedMesh);
+    }
+
+    for (FFBXImportNode& Node : OutImportScene.Nodes)
+    {
+        Node.StaticMeshIndex = -1;
+        Node.SkeletalMeshIndex = -1;
+    }
+
+    OutImportScene.StaticMeshes.clear();
+    OutImportScene.SkeletalMeshes.clear();
+
+    if (BakedMesh.Vertices.empty() || BakedMesh.Indices.empty())
+    {
+        return;
+    }
+
+    OutImportScene.StaticMeshes.push_back(BakedMesh);
+    OutImportScene.Nodes[BakedSourceNodeIndex].StaticMeshIndex = 0;
+}
+
+void FFBXImporter::AppendRawDataToStaticMesh(
+    const FFBXMeshRawData& RawData,
+    const FMatrix& LocalToBakedRoot,
+    OUT FFBXStaticMeshImportData& OutMeshData) const
+{
+    const uint32 VertexBase = static_cast<uint32>(OutMeshData.Vertices.size());
+    const uint32 IndexBase = static_cast<uint32>(OutMeshData.Indices.size());
+    const int32 MaterialBase = static_cast<int32>(OutMeshData.MaterialSlots.size());
+    const FMatrix NormalToBakedRoot = LocalToBakedRoot.GetInverse().GetTransposed();
+
+    OutMeshData.Vertices.reserve(OutMeshData.Vertices.size() + RawData.Vertices.size());
+    for (const FNormalVertex& Src : RawData.Vertices)
+    {
+        FNormalVertex Dst = Src;
+        Dst.Position = LocalToBakedRoot.TransformPosition(Src.Position);
+        Dst.Normal = NormalToBakedRoot.TransformVector(Src.Normal).GetSafeNormal();
+        Dst.Tangent = LocalToBakedRoot.TransformVector(Src.Tangent).GetSafeNormal();
+        Dst.Bitangent = LocalToBakedRoot.TransformVector(Src.Bitangent).GetSafeNormal();
+        OutMeshData.Vertices.push_back(Dst);
+    }
+
+    OutMeshData.Indices.reserve(OutMeshData.Indices.size() + RawData.Indices.size());
+    for (uint32 Index : RawData.Indices)
+    {
+        OutMeshData.Indices.push_back(VertexBase + Index);
+    }
+
+    OutMeshData.MaterialSlots.insert(
+        OutMeshData.MaterialSlots.end(),
+        RawData.MaterialSlots.begin(),
+        RawData.MaterialSlots.end());
+
+    OutMeshData.Sections.reserve(OutMeshData.Sections.size() + RawData.Sections.size());
+    for (const FStaticMeshSection& StaticSection : RawData.Sections)
+    {
+        FStaticMeshSection Section = {};
+        Section.StartIndex = IndexBase + StaticSection.StartIndex;
+        Section.IndexCount = StaticSection.IndexCount;
+        Section.MaterialSlotIndex = MaterialBase + StaticSection.MaterialSlotIndex;
+        OutMeshData.Sections.push_back(Section);
     }
 }
 

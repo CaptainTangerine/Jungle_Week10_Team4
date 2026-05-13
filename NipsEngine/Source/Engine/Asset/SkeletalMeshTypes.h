@@ -61,6 +61,7 @@ struct FSkeletalMesh
 {
     FString FilePathName;
     FString SkeletonAssetPath;
+    int32 SourceNodeIndex = -1;
     FMatrix SourceNodeLocalTransform = FMatrix::Identity;
     FMatrix SourceNodeGlobalTransform = FMatrix::Identity;
     int32 SourceSceneSkeletalMeshIndex = 0;

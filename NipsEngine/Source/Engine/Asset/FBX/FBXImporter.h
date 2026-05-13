@@ -114,6 +114,7 @@ private:
     void TraversalNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene);
     int32 AddImportNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene);
     void BuildGroupedSkeletalMeshes(OUT FFBXImportScene& OutImportScene);
+    void BuildBakedSceneStaticMesh(OUT FFBXImportScene& OutImportScene);
     void BuildGroupedSkinnedStaticMeshes(OUT FFBXImportScene& OutImportScene);
     bool BuildSkeletalMeshGroupImportData(
         const TArray<FPendingSkinnedMeshNode>& MeshNodes,
@@ -121,6 +122,10 @@ private:
     bool MergeSkinnedGroupToStatic(
         const TArray<FPendingSkinnedMeshNode>& MeshNodes,
         OUT FFBXStaticMeshImportData& OutMeshData);
+    void AppendRawDataToStaticMesh(
+        const FFBXMeshRawData& RawData,
+        const FMatrix& LocalToBakedRoot,
+        OUT FFBXStaticMeshImportData& OutMeshData) const;
 
     /* Mesh 구조체를 채우기 위한 중간 데이터 */
     bool BuildMeshRawData(FbxNode* Node, FbxMesh* Mesh, OUT FFBXMeshRawData& OutRawData);

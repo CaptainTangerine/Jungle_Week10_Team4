@@ -31,7 +31,7 @@ struct FStaticMeshBinaryHeader
 struct FSkeletalMeshBinaryHeader
 {
     uint32 MagicNumber = 0x484D4B53;
-    uint32 Version = 5;
+    uint32 Version = 6;
     uint32 VertexCount = 0;
     uint32 IndexCount = 0;
     uint32 SectionCount = 0;
