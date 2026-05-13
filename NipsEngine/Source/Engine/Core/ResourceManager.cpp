@@ -22,6 +22,65 @@ namespace
 {
     constexpr const char* DefaultUberLitShaderPath = "Shaders/UberLit.hlsl";
 
+    FString MakeSkeletalMeshMaterialResourceKey(
+        const FSkeletalMesh& Mesh,
+        const FSkeletalMeshMaterialSlot& Slot,
+        int32 SlotIndex)
+    {
+        FString SourceKey = Mesh.SkeletonAssetPath;
+        if (SourceKey.empty())
+        {
+            SourceKey = Mesh.FilePathName;
+        }
+        if (SourceKey.empty())
+        {
+            SourceKey = "SkeletalMesh";
+        }
+
+        const FString SlotKey = Slot.SlotName.empty()
+            ? FString("Material")
+            : Slot.SlotName;
+
+        return SourceKey +
+            "|skel" + std::to_string(Mesh.SourceSceneSkeletalMeshIndex) +
+            "|slot" + std::to_string(SlotIndex) +
+            "|" + SlotKey;
+    }
+
+    UTexture* ResolveSkeletalMaterialTextureParam(
+        FResourceManager& ResourceManager,
+        const FString& ParamName,
+        const FMaterialParamValue& ParamValue,
+        const TMap<FString, FString>& TextureParamPaths,
+        UTexture* DefaultWhiteTexture,
+        UTexture* DefaultNormalTexture)
+    {
+        if (std::holds_alternative<UTexture*>(ParamValue.Value))
+        {
+            if (UTexture* Texture = std::get<UTexture*>(ParamValue.Value))
+            {
+                return Texture;
+            }
+        }
+
+        FString TexturePath;
+        auto TexturePathIt = TextureParamPaths.find(ParamName);
+        if (TexturePathIt != TextureParamPaths.end())
+        {
+            TexturePath = TexturePathIt->second;
+        }
+
+        if (!TexturePath.empty())
+        {
+            if (UTexture* Texture = ResourceManager.LoadTexture(TexturePath, ResourceManager.GetCachedDevice()))
+            {
+                return Texture;
+            }
+        }
+
+        return ParamName == "NormalMap" ? DefaultNormalTexture : DefaultWhiteTexture;
+    }
+
     bool TryLoadKnownMaterialShader(FResourceManager& ResourceManager, const FString& ShaderName)
     {
         if (ShaderName == "Shaders/UberLit.hlsl" || ShaderName == "Shaders/UberUnlit.hlsl")
@@ -2762,36 +2821,40 @@ void FResourceManager::RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh)
     UTexture* DefaultWhiteTexture = GetTexture("DefaultWhite");
     UTexture* DefaultNormalTexture = GetTexture("DefaultNormal");
 
-    for (FSkeletalMeshMaterialSlot& Slot : Mesh.Slots)
+    for (int32 SlotIndex = 0; SlotIndex < static_cast<int32>(Mesh.Slots.size()); ++SlotIndex)
     {
-        if (!Slot.SerializedMaterialParams.empty() && DefaultMaterial != nullptr)
-        {
-            UMaterialInstance* Instance = UMaterialInstance::CreateTransient(DefaultMaterial);
-            Instance->Name = Slot.SlotName.empty() ? FString("SkeletalMeshMaterial") : Slot.SlotName;
+        FSkeletalMeshMaterialSlot& Slot = Mesh.Slots[SlotIndex];
+        UMaterialInterface* PreviousMaterial = Slot.Material;
+        UMaterialInstance* PreviousMaterialInstance = Cast<UMaterialInstance>(PreviousMaterial);
 
-            for (const auto& [ParamName, ParamValue] : Slot.SerializedMaterialParams)
+        TMap<FString, FMaterialParamValue> MaterialParams = Slot.SerializedMaterialParams;
+        if (PreviousMaterial != nullptr)
+        {
+            PreviousMaterial->GatherAllParams(MaterialParams);
+        }
+
+        const bool bNeedsManagedInstance =
+            !MaterialParams.empty() ||
+            (PreviousMaterialInstance != nullptr && PreviousMaterialInstance->IsComponentTransient());
+
+        if (bNeedsManagedInstance && DefaultMaterial != nullptr)
+        {
+            const FString MaterialKey = MakeSkeletalMeshMaterialResourceKey(Mesh, Slot, SlotIndex);
+            UMaterialInstance* Instance = CreateMaterialInstance(MaterialKey, DefaultMaterial);
+
+            for (const auto& [ParamName, ParamValue] : MaterialParams)
             {
                 if (ParamValue.Type == EMaterialParamType::Texture)
                 {
-                    FString TexturePath;
-                    auto TexturePathIt = Slot.SerializedTextureParamPaths.find(ParamName);
-                    if (TexturePathIt != Slot.SerializedTextureParamPaths.end())
-                    {
-                        TexturePath = TexturePathIt->second;
-                    }
-
-                    UTexture* Texture = nullptr;
-                    if (!TexturePath.empty())
-                    {
-                        Texture = LoadTexture(TexturePath, CachedDevice.Get());
-                    }
-
-                    if (Texture == nullptr)
-                    {
-                        Texture = ParamName == "NormalMap" ? DefaultNormalTexture : DefaultWhiteTexture;
-                    }
-
-                    Instance->SetParam(ParamName, FMaterialParamValue(Texture));
+                    Instance->SetParam(
+                        ParamName,
+                        FMaterialParamValue(ResolveSkeletalMaterialTextureParam(
+                            *this,
+                            ParamName,
+                            ParamValue,
+                            Slot.SerializedTextureParamPaths,
+                            DefaultWhiteTexture,
+                            DefaultNormalTexture)));
                     continue;
                 }
 
