@@ -61,6 +61,7 @@ public:
     const TArray<FNormalVertex>& GetSkinnedVertices() const { return SkinnedRenderResource.SkinnedVertices; }
 
 protected:
+    void TickComponent(float DeltaTime) override;
     void MarkBoundsDirty();
     void MarkRenderStateDirty();
     void EnsureBoundsUpdated() const;
@@ -79,4 +80,5 @@ protected:
 
     mutable bool bBoundsDirty = true;
     bool bRenderStateDirty = true;
+    float DebugHeadNodTimeSeconds = 0.0f;
 };

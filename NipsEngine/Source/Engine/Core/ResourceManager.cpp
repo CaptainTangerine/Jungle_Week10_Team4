@@ -2706,6 +2706,11 @@ UStaticMesh* FResourceManager::LoadStaticMeshWithOptions(const FString& Path, co
 {
     // 캐시 키: normalize 여부에 따라 구분
     const FString CacheKey = LoadOptions.bNormalizeToUnitCube ? (Path + "|norm") : Path;
+    const std::filesystem::path InputPath(FPaths::ToWide(Path));
+    FWString Extension = InputPath.extension().wstring();
+    std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+        [](wchar_t Character) { return static_cast<wchar_t>(towlower(Character)); });
+    const bool bFbxPath = Extension == L".fbx";
 
     // 메모리 캐시 확인
     if (UStaticMesh* FoundMesh = FindStaticMesh(CacheKey))
@@ -2717,7 +2722,7 @@ UStaticMesh* FResourceManager::LoadStaticMeshWithOptions(const FString& Path, co
 
     FStaticMesh* LoadedMeshData = nullptr;
     double BinaryLoadSec = 0.0;
-    double ObjLoadSec = 0.0;
+    double SourceLoadSec = 0.0;
 
     //	2. Binary Load 시도
     if (IsStaticMeshBinaryValid(Path, BinaryPath))
@@ -2735,27 +2740,49 @@ UStaticMesh* FResourceManager::LoadStaticMeshWithOptions(const FString& Path, co
         BinaryLoadSec = std::chrono::duration<double>(BinaryEnd - BinaryStart).count();
     }
 
-    //	3. Binary 실패 시 OBJ Load
+    //	3. Binary 실패 시 원본 로드
     if (LoadedMeshData == nullptr)
     {
-        const auto ObjStart = std::chrono::steady_clock::now();
-        LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
-        const auto ObjEnd = std::chrono::steady_clock::now();
-        ObjLoadSec = std::chrono::duration<double>(ObjEnd - ObjStart).count();
+        const auto SourceStart = std::chrono::steady_clock::now();
+        if (bFbxPath)
+        {
+            FFBXImporter Importer;
+            FFBXImportOptions ImportOptions = {};
+            ImportOptions.bImportSkinnedMeshesAsStatic = true;
+            FFBXImportScene ImportScene = Importer.Import(Path, ImportOptions);
+            if (!ImportScene.StaticMeshes.empty())
+            {
+                LoadedMeshData = Importer.CreateStaticMeshFromImportData(ImportScene.StaticMeshes[0]);
+                if (LoadedMeshData != nullptr)
+                {
+                    LoadedMeshData->PathFileName = Path;
+                }
+            }
+        }
+        else
+        {
+            LoadedMeshData = ObjLoader.Load(Path, LoadOptions);
+        }
+        const auto SourceEnd = std::chrono::steady_clock::now();
+        SourceLoadSec = std::chrono::duration<double>(SourceEnd - SourceStart).count();
 
         if (LoadedMeshData == nullptr)
         {
-            UE_LOG("[StaticMeshLoad] Failed | Path=%s | BinarySec=%.6f | ObjSec=%.6f", Path.c_str(), BinaryLoadSec,
-                   ObjLoadSec);
+            UE_LOG(
+                "[StaticMeshLoad] Failed | Path=%s | BinarySec=%.6f | SourceSec=%.6f",
+                Path.c_str(),
+                BinaryLoadSec,
+                SourceLoadSec);
             return nullptr;
         }
 
-        //	4. OBJ 로드 성공 시 Binary 저장
+        //	4. 원본 로드 성공 시 Binary 저장
         const bool bSaveBinaryOk = BinarySerializer.SaveStaticMesh(BinaryPath, Path, *LoadedMeshData);
         UE_LOG(
-            "[StaticMeshLoad] Source=OBJ | Path=%s | ObjSec=%.6f | BinarySave=%s | BinaryPath=%s",
+            "[StaticMeshLoad] Source=%s | Path=%s | SourceSec=%.6f | BinarySave=%s | BinaryPath=%s",
+            bFbxPath ? "FBX" : "OBJ",
             Path.c_str(),
-            ObjLoadSec,
+            SourceLoadSec,
             bSaveBinaryOk ? "OK" : "FAIL",
             BinaryPath.c_str());
     }

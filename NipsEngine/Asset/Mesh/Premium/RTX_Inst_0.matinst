@@ -1,6 +1,0 @@
-{
-        "LightingModel" : "Lambert",
-        "Name" : "Asset/Mesh/Premium/RTX_Inst_0.matinst",
-        "OverridedParams" : [],
-        "Parent" : "Cube_Baked.001"
-      }

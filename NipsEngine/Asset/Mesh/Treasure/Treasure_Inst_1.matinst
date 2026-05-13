@@ -1,6 +1,0 @@
-{
-        "LightingModel" : "Lambert",
-        "Name" : "Asset/Mesh/Treasure/Treasure_Inst_1.matinst",
-        "OverridedParams" : [],
-        "Parent" : "treasure_chest"
-      }

@@ -60,7 +60,7 @@ void FEditorRenderPipeline::RenderViewport(FRenderer& Renderer, int32 ViewportIn
 
     UWorld* World = VC->GetFocusedWorld();
     const FEditorSettings& Settings = Editor->GetSettings();
-    const FShowFlags& ShowFlags = Settings.ShowFlags;
+    const FShowFlags ShowFlags = Bus.GetShowFlags();
     const EViewMode ViewMode = SceneView.ViewMode;
     const FFrustum& ViewFrustum = SceneView.CameraFrustum;
 
@@ -124,10 +124,17 @@ bool FEditorRenderPipeline::PrepareViewport(FRenderer& Renderer, int32 ViewportI
     Renderer.BeginViewportFrame(SceneViewport.GetViewportRenderTargets());
 
     const FEditorSettings& Settings = Editor->GetSettings();
+    FShowFlags ViewShowFlags = Settings.ShowFlags;
+    if (OutViewportClient->GetPlayState() != EViewportPlayState::Editing)
+    {
+        ViewShowFlags.bGrid = false;
+        ViewShowFlags.bAxis = false;
+    }
+
     Bus.Clear();
     Bus.SetViewProjection(OutSceneView.ViewMatrix, OutSceneView.ProjectionMatrix);
     Bus.SetCameraPlane(OutSceneView.NearPlane, OutSceneView.FarPlane);
-    Bus.SetRenderSettings(OutSceneView.ViewMode, Settings.ShowFlags);
+    Bus.SetRenderSettings(OutSceneView.ViewMode, ViewShowFlags);
     Bus.SetViewportSize(FVector2(static_cast<float>(Rect.Width), static_cast<float>(Rect.Height)));
     Bus.SetViewportOrigin(FVector2(0.0f, 0.0f));
     Bus.SetFXAAEnabled(Settings.bEnableFXAA && !OutSceneView.bOrthographic);

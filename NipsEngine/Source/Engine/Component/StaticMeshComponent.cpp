@@ -21,6 +21,7 @@ void UStaticMeshComponent::PostDuplicate(UObject* Original)
 
     const UStaticMeshComponent* Orig = Cast<UStaticMeshComponent>(Original);
     StaticMeshAsset = Orig->StaticMeshAsset;
+    StaticMeshAssetPath = Orig->StaticMeshAssetPath;
     bNormalizeOnImport = Orig->bNormalizeOnImport;
     ClearBoneAttachment();
     bBoundsDirty = true;
@@ -102,6 +103,26 @@ UStaticMesh* UStaticMeshComponent::GetStaticMesh() const
 bool UStaticMeshComponent::HasValidMesh() const
 {
     return StaticMeshAsset != nullptr && StaticMeshAsset->HasValidMeshData();
+}
+
+bool UStaticMeshComponent::ImportStaticMeshFromFBX(const FString& FilePath)
+{
+    if (FilePath.empty())
+    {
+        return false;
+    }
+
+    const FString PreviousPath = StaticMeshAssetPath;
+    UStaticMesh* Mesh = FResourceManager::Get().LoadStaticMesh(FilePath, bNormalizeOnImport);
+    if (Mesh == nullptr)
+    {
+        StaticMeshAssetPath = PreviousPath;
+        return false;
+    }
+
+    SetStaticMesh(Mesh);
+    StaticMeshAssetPath = FilePath;
+    return true;
 }
 
 void UStaticMeshComponent::GetEditableProperties(TArray<FPropertyDescriptor>& OutProps)

@@ -4,6 +4,7 @@
 #include "ImGui/imgui.h"
 #include "Core/ActorTags.h"
 #include "Core/ActorTagRegistry.h"
+#include "Core/Paths.h"
 #include "Core/PropertyTypes.h"
 #include "Math/Color.h"
 #include "Core/ResourceManager.h"
@@ -27,6 +28,8 @@
 #include "Editor/Utility/EditorUIUtils.h"
 #include "Engine/Render/Renderer/RenderFlow/ShadowAtlasManager.h"
 
+#include <commdlg.h>
+#include <filesystem>
 #define SEPARATOR(); ImGui::Spacing(); ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing(); ImGui::Spacing();
 
 namespace
@@ -59,6 +62,54 @@ namespace
     // ─────────────────── Helper ───────────────────────────
     int32 ExtractActorID(const AActor* Actor);
     UStaticMeshComponent* FindFirstStaticMeshComponent(AActor* Actor);
+
+    FWString GetStaticMeshImportInitialDir()
+    {
+        std::filesystem::path MeshDir(FPaths::RootDir());
+        MeshDir /= L"Asset";
+        MeshDir /= L"Mesh";
+        MeshDir = MeshDir.lexically_normal();
+        MeshDir.make_preferred();
+
+        std::error_code Ec;
+        std::filesystem::create_directories(MeshDir, Ec);
+        return MeshDir.wstring();
+    }
+
+    bool OpenStaticMeshFBXFileDialog(FString& OutFilePath)
+    {
+        OutFilePath.clear();
+
+        WCHAR FileBuffer[MAX_PATH] = { 0 };
+        const FWString InitialDir = GetStaticMeshImportInitialDir();
+        const std::filesystem::path PrevCwd = std::filesystem::current_path();
+
+        std::error_code ChdirEc;
+        std::filesystem::current_path(std::filesystem::path(InitialDir), ChdirEc);
+
+        OPENFILENAMEW DialogDesc = {};
+        DialogDesc.lStructSize = sizeof(DialogDesc);
+        DialogDesc.hwndOwner = static_cast<HWND>(ImGui::GetMainViewport()->PlatformHandleRaw);
+        DialogDesc.lpstrFilter = L"FBX Files (*.fbx)\0*.fbx\0All Files (*.*)\0*.*\0";
+        DialogDesc.lpstrFile = FileBuffer;
+        DialogDesc.nMaxFile = MAX_PATH;
+        DialogDesc.lpstrInitialDir = InitialDir.c_str();
+        DialogDesc.lpstrDefExt = L"fbx";
+        DialogDesc.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+        const BOOL bPicked = GetOpenFileNameW(&DialogDesc);
+
+        std::error_code RestoreEc;
+        std::filesystem::current_path(PrevCwd, RestoreEc);
+
+        if (!bPicked)
+        {
+            return false;
+        }
+
+        OutFilePath = FPaths::ToUtf8(FileBuffer);
+        return true;
+    }
 
     TArray<FString> GetStringPropertyOptions(uint32 PropNameId, UEditorEngine* EditorEngine)
     {
@@ -745,6 +796,11 @@ void FEditorPropertyWidget::RenderComponentProperties()
 		ImGui::TextDisabled("Editor Only: %s", ScriptComp->IsEditorOnly() ? "Yes" : "No");
 	}
 
+    if (UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(SelectedComponent))
+    {
+        RenderStaticMeshImportControls(StaticMeshComp);
+    }
+
 	// Special: Light component — override camera with light's perspective
 	if (SelectedComponent->IsA<ULightComponent>())
 	{
@@ -800,6 +856,28 @@ void FEditorPropertyWidget::RenderComponentProperties()
 		static_cast<USceneComponent*>(SelectedComponent)->MarkTransformDirty();
 		SelectionManager->GetGizmo()->UpdateGizmoTransform();
 	}
+}
+
+void FEditorPropertyWidget::RenderStaticMeshImportControls(UStaticMeshComponent* StaticMeshComp)
+{
+    if (StaticMeshComp == nullptr)
+    {
+        return;
+    }
+
+    SEPARATOR();
+    if (ImGui::Button("Import StaticMesh From FBX", ImVec2(-1, 0)))
+    {
+        FString PickedPath;
+        if (OpenStaticMeshFBXFileDialog(PickedPath) && StaticMeshComp->ImportStaticMeshFromFBX(PickedPath))
+        {
+            StaticMeshComp->MarkTransformDirty();
+            if (SelectionManager && SelectionManager->GetGizmo())
+            {
+                SelectionManager->GetGizmo()->UpdateGizmoTransform();
+            }
+        }
+    }
 }
 
 // 다른 씬 컴포넌트를 참조할 수 있도록 액터 내 컴포넌트 목록을 드롭다운으로 보여줍니다.

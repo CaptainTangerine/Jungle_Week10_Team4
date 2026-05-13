@@ -2,6 +2,9 @@
 #include "FFBXPreviewViewportLayout.h"
 
 #include "Editor/EditorEngine.h"
+#include "Component/Light/AmbientLightComponent.h"
+#include "Component/Light/DirectionalLightComponent.h"
+#include "GameFramework/PrimitiveActors.h"
 #include "GameFramework/World.h"
 #include "Render/Renderer/Renderer.h"
 
@@ -22,6 +25,44 @@ namespace
             }
         }
         return false;
+    }
+
+    void AddPreviewDefaultLights(UWorld* World)
+    {
+        if (!World)
+        {
+            return;
+        }
+
+        AAmbientLightActor* AmbientActor = World->SpawnActor<AAmbientLightActor>();
+        if (!AmbientActor)
+        {
+            return;
+        }
+
+        AmbientActor->SetTag("FBXPreviewAmbientLight");
+        if (UAmbientLightComponent* AmbientLight = Cast<UAmbientLightComponent>(AmbientActor->GetRootComponent()))
+        {
+            AmbientLight->SetLightColor(FColor(1.0f, 1.0f, 1.0f, 1.0f));
+            AmbientLight->SetIntensity(0.6f);
+        }
+
+        ADirectionalLightActor* DirectionalActor = World->SpawnActor<ADirectionalLightActor>();
+        if (!DirectionalActor)
+        {
+            return;
+        }
+
+        DirectionalActor->SetTag("FBXPreviewDirectionalLight");
+        if (UDirectionalLightComponent* DirectionalLight = Cast<UDirectionalLightComponent>(DirectionalActor->GetRootComponent()))
+        {
+            const FVector DirectionToLight = FVector(-0.45f, -0.35f, 0.82f).GetSafeNormal();
+            DirectionalLight->SetRelativeRotationQuat(FQuat(FMatrix::MakeFromX(DirectionToLight * -1.0f)));
+            DirectionalLight->SetLightColor(FColor(1.0f, 0.96f, 0.9f, 1.0f));
+            DirectionalLight->SetIntensity(1.2f);
+            DirectionalLight->SetCastShadows(false);
+            DirectionalLight->SetDayNightAttenuationEnabled(false);
+        }
     }
 }
 
@@ -95,6 +136,7 @@ FFBXPreviewViewport* FFBXPreviewViewportLayout::CreatePreview(const FString& Nam
     {
         Context.World->SetWorldType(EWorldType::ViewerPreview);
         Engine->ApplySpatialIndexMaintenanceSettings(Context.World);
+        AddPreviewDefaultLights(Context.World);
     }
 
     FFBXPreviewViewport Viewport;
@@ -158,6 +200,7 @@ UWorld* FFBXPreviewViewportLayout::ResetPreviewWorld(int32 PreviewId)
     {
         Context.World->SetWorldType(EWorldType::ViewerPreview);
         Engine->ApplySpatialIndexMaintenanceSettings(Context.World);
+        AddPreviewDefaultLights(Context.World);
     }
 
     Preview->World = Context.World;

@@ -1,7 +1,8 @@
 ﻿#include "SkinnedMeshComponent.h"
 
-#include "Core/PlatformTime.h"
 #include "Core/ResourceManager.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/World.h"
 #include "Render/Resource/Material.h"
 
 #include <cfloat>
@@ -396,6 +397,115 @@ bool USkinnedMeshComponent::UploadSkinnedVertices(ID3D11DeviceContext* Context)
     return SkinnedRenderResource.Upload(Context);
 }
 
+void USkinnedMeshComponent::TickComponent(float DeltaTime)
+{
+    UMeshComponent::TickComponent(DeltaTime);
+
+    UWorld* World = GetOwner() ? GetOwner()->GetFocusedWorld() : nullptr;
+    if (World == nullptr || World->GetWorldType() != EWorldType::PIE)
+    {
+        return;
+    }
+
+    if (SkeletalMeshAsset == nullptr || !SkeletalMeshAsset->HasValidMeshData())
+    {
+        return;
+    }
+
+    const TArray<FBoneInfo>& Bones = SkeletalMeshAsset->GetBones();
+    if (Bones.empty())
+    {
+        return;
+    }
+
+    if (CurrentBoneLocalTransforms.size() != Bones.size())
+    {
+        CurrentBoneLocalTransforms.resize(Bones.size());
+        for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+        {
+            CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
+        }
+    }
+
+    DebugHeadNodTimeSeconds += DeltaTime;
+    constexpr float DegToRad = MathUtil::PI / 180.0f;
+    const float DebugPitchRadians = static_cast<float>(std::sin(DebugHeadNodTimeSeconds * 5.0f) * 20.f) * DegToRad;
+    const float DebugArmRadians = static_cast<float>(std::sin(DebugHeadNodTimeSeconds * 8.0f) * 35.0f) * DegToRad;
+
+    auto ContainsAny = [](const FString& Text, std::initializer_list<const char*> Tokens) -> bool
+    {
+        for (const char* Token : Tokens)
+        {
+            if (Text.find(Token) != FString::npos)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    auto EqualsAny = [](const FString& Text, std::initializer_list<const char*> Tokens) -> bool
+    {
+        for (const char* Token : Tokens)
+        {
+            if (Text == Token)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    auto HasChildNamed = [&Bones, &EqualsAny](int32 ParentBoneIdx, std::initializer_list<const char*> ChildNames) -> bool
+    {
+        for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+        {
+            if (Bones[BoneIdx].ParentIndex == ParentBoneIdx && EqualsAny(Bones[BoneIdx].Name, ChildNames))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    bool bUpdatedDebugPose = false;
+
+    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
+    {
+        const FString& BoneName = Bones[BoneIdx].Name;
+        const bool bIsHeadBone =
+            ContainsAny(BoneName, { "Head", "head", "HEAD" });
+        const bool bIsLeftArmBone =
+            EqualsAny(BoneName, { "Left arm", "Left_Arm", "LeftArm", "upperarm_l", "UpperArm_L" });
+        const bool bIsRightArmBone =
+            EqualsAny(BoneName, { "Right arm", "Right_Arm", "RightArm", "upperarm_r", "UpperArm_R" });
+
+        if (bIsHeadBone)
+        {
+            CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform * FMatrix::MakeRotationX(DebugPitchRadians);
+            bUpdatedDebugPose = true;
+        }
+        else if (bIsLeftArmBone)
+        {
+            CurrentBoneLocalTransforms[BoneIdx] =
+                Bones[BoneIdx].LocalTransform *
+                FMatrix::MakeRotationY(DebugArmRadians);
+            bUpdatedDebugPose = true;
+        }
+        else if (bIsRightArmBone)
+        {
+            CurrentBoneLocalTransforms[BoneIdx] =
+                Bones[BoneIdx].LocalTransform *
+                FMatrix::MakeRotationY(-DebugArmRadians);
+            bUpdatedDebugPose = true;
+        }
+    }
+
+    if (bUpdatedDebugPose)
+    {
+        RebuildCurrentBoneGlobalTransforms(Bones);
+        UpdateCPUSkinning();
+    }
+}
+
 void USkinnedMeshComponent::UpdateCPUSkinning()
 {
     if (SkeletalMeshAsset == nullptr || !SkeletalMeshAsset->HasValidMeshData())
@@ -423,32 +533,6 @@ void USkinnedMeshComponent::UpdateCPUSkinning()
         {
             CurrentBoneLocalTransforms[BoneIdx] = Bones[BoneIdx].LocalTransform;
         }
-    }
-
-    // 테스트용 Head 흔들림은 현재 포즈를 덮지 않고 skinning 계산에만 임시 반영한다.
-    int32 DebugHeadBoneIndex = -1;
-    FMatrix DebugHeadOriginalLocal = FMatrix::Identity;
-    const double TimeSeconds = FPlatformTime::Seconds();
-    constexpr float DegToRad = MathUtil::PI / 180.0f;
-    const float DebugYawRadians = static_cast<float>(std::sin(TimeSeconds * 5.f) * 0.2f) * DegToRad;
-
-    for (int32 BoneIdx = 0; BoneIdx < static_cast<int32>(Bones.size()); ++BoneIdx)
-    {
-        const FString& BoneName = Bones[BoneIdx].Name;
-        const bool bIsHeadBone =
-            BoneName.find("Head") != FString::npos ||
-            BoneName.find("head") != FString::npos ||
-            BoneName.find("HEAD") != FString::npos;
-
-        if (!bIsHeadBone)
-        {
-            continue;
-        }
-
-        DebugHeadBoneIndex = BoneIdx;
-        DebugHeadOriginalLocal = CurrentBoneLocalTransforms[BoneIdx];
-        CurrentBoneLocalTransforms[BoneIdx] =DebugHeadOriginalLocal * FMatrix::MakeRotationX(DebugYawRadians);
-        break;
     }
 
     // 현재 Bone Local Transform으로 Global Transform을 계산한다.

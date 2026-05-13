@@ -37,6 +37,7 @@ private:
     void RenderDetails(AActor* PrimaryActor, const TArray<AActor*>& SelectedActors);
     void RenderActorProperties(AActor* PrimaryActor, const TArray<AActor*>& SelectedActors);
     void RenderComponentProperties();
+    void RenderStaticMeshImportControls(class UStaticMeshComponent* StaticMeshComp);
     bool RenderPropertyWidget(struct FPropertyDescriptor& Prop);
     void RenderSceneComponentRefWidget(struct FPropertyDescriptor& Prop, AActor* Owner);
     void RenderInterpControlPoints(class UInterpToMovementComponent* Comp);

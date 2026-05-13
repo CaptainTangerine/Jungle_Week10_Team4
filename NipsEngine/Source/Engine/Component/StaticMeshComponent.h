@@ -18,6 +18,7 @@ public:
     void SetStaticMesh(UStaticMesh* InStaticMesh);
     UStaticMesh* GetStaticMesh() const;
     bool HasValidMesh() const;
+    bool ImportStaticMeshFromFBX(const FString& FilePath);
 
     void GetEditableProperties(TArray<FPropertyDescriptor>& OutProps) override;
     void PostEditProperty(const char * PropertyName) override;
