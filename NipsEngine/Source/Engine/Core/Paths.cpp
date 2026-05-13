@@ -1,6 +1,15 @@
 ﻿#include "Engine/Core/Paths.h"
 #include <filesystem>
 
+namespace
+{
+    bool IsRelativePathInsideRoot(const std::filesystem::path& RelativePath)
+    {
+        auto It = RelativePath.begin();
+        return It != RelativePath.end() && It->wstring() != L"..";
+    }
+}
+
 FWString FPaths::RootDir()
 {
     static FWString Cached;
@@ -81,9 +90,11 @@ FWString FPaths::ToWide(const FString& Utf8Str)
     }
 
     const int Utf8Length = static_cast<int>(Utf8Str.size());
+    UINT CodePage = CP_UTF8;
+    DWORD Flags = MB_ERR_INVALID_CHARS;
     int WideLength = MultiByteToWideChar(
-        CP_UTF8,
-        MB_ERR_INVALID_CHARS,
+        CodePage,
+        Flags,
         Utf8Str.data(),
         Utf8Length,
         nullptr,
@@ -91,10 +102,24 @@ FWString FPaths::ToWide(const FString& Utf8Str)
 
     if (WideLength == 0)
     {
-        // Fallback without strict validation to preserve legacy behavior for malformed input.
+        CodePage = CP_ACP;
+        Flags = 0;
         WideLength = MultiByteToWideChar(
-            CP_UTF8,
-            0,
+            CodePage,
+            Flags,
+            Utf8Str.data(),
+            Utf8Length,
+            nullptr,
+            0);
+    }
+
+    if (WideLength == 0)
+    {
+        CodePage = CP_UTF8;
+        Flags = 0;
+        WideLength = MultiByteToWideChar(
+            CodePage,
+            Flags,
             Utf8Str.data(),
             Utf8Length,
             nullptr,
@@ -107,8 +132,8 @@ FWString FPaths::ToWide(const FString& Utf8Str)
 
     FWString Result(static_cast<size_t>(WideLength), L'\0');
     const int ConvertedLength = MultiByteToWideChar(
-        CP_UTF8,
-        0,
+        CodePage,
+        Flags,
         Utf8Str.data(),
         Utf8Length,
         Result.data(),
@@ -235,4 +260,40 @@ FString FPaths::Normalize(const FString& Path)
     std::filesystem::path NormalizedPath(WidePath);
     FWString NormalizedWide = NormalizedPath.lexically_normal().generic_wstring();
     return ToUtf8(NormalizedWide);
+}
+
+FString FPaths::NormalizeProjectPath(const FString& Path)
+{
+    if (Path.empty())
+    {
+        return {};
+    }
+
+    namespace fs = std::filesystem;
+
+    fs::path NormalizedPath(FPaths::ToWide(Path));
+    NormalizedPath = NormalizedPath.lexically_normal();
+
+    if (!NormalizedPath.is_absolute())
+    {
+        return FPaths::ToUtf8(NormalizedPath.generic_wstring());
+    }
+
+    fs::path RootPath(FPaths::RootDir());
+    RootPath = RootPath.lexically_normal();
+
+    std::error_code ErrorCode;
+    fs::path RelativePath = fs::relative(NormalizedPath, RootPath, ErrorCode);
+    if (!ErrorCode && IsRelativePathInsideRoot(RelativePath))
+    {
+        return FPaths::ToUtf8(RelativePath.generic_wstring());
+    }
+
+    RelativePath = NormalizedPath.lexically_relative(RootPath);
+    if (!RelativePath.empty() && IsRelativePathInsideRoot(RelativePath))
+    {
+        return FPaths::ToUtf8(RelativePath.generic_wstring());
+    }
+
+    return FPaths::ToUtf8(NormalizedPath.generic_wstring());
 }

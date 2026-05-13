@@ -43,4 +43,7 @@ public:
 
     // JSON 한글 경로를 불러와서 FString 문자열로 변경할 때 사용하는 헬퍼 함수
     static FString Normalize(const FString& Path);
+
+    // 프로젝트 내부 절대경로는 RootDir 기준 상대경로로, 그 외 경로는 generic slash 형태로 정규화합니다.
+    static FString NormalizeProjectPath(const FString& Path);
 };

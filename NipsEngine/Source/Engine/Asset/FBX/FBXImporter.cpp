@@ -62,9 +62,11 @@ FFBXImportScene FFBXImporter::Import(const FString& Path, const FFBXImportOption
 {
     FFBXSDKContext& Context = FFBXSDKContext::Get();
     FFBXImportScene ImportScene = {};
-    ImportScene.SourceFilePath = Path;
+    const FString SourcePath = FPaths::NormalizeProjectPath(Path);
+    const FString FileSystemPath = FPaths::ToAbsoluteString(FPaths::ToWide(SourcePath));
+    ImportScene.SourceFilePath = SourcePath;
     ImportOptions = Options;
-    ImportDirectory = FPaths::ToUtf8(std::filesystem::path(FPaths::ToWide(Path)).parent_path().generic_wstring());
+    ImportDirectory = FPaths::ToUtf8(std::filesystem::path(FPaths::ToWide(FileSystemPath)).parent_path().generic_wstring());
     PendingSkinnedMeshNodes.clear();
     FbxNodeIdToImportNodeIndex.clear();
 
@@ -73,7 +75,7 @@ FFBXImportScene FFBXImporter::Import(const FString& Path, const FFBXImportOption
         return ImportScene;
     }
 
-    FFBXSceneHandle Scene = Context.LoadScene(Path);
+    FFBXSceneHandle Scene = Context.LoadScene(FileSystemPath);
     if (!Scene)
     {
         return ImportScene;
