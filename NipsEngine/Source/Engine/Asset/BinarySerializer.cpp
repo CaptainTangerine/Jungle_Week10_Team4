@@ -36,7 +36,7 @@
 constexpr uint32 STATIC_MESH_BINARY_MAGIC = 0x4853454D; // 'MESH'
 constexpr uint32 STATIC_MESH_BINARY_VERSION = 2;
 constexpr uint32 SKELETAL_MESH_BINARY_MAGIC = 0x484D4B53; // 'SKMH'
-constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 4;
+constexpr uint32 SKELETAL_MESH_BINARY_VERSION = 5;
 
 //	Vailidation Checkers
 constexpr uint32 MAX_STATIC_MESH_VERTEX_COUNT   = 10'000'000;
