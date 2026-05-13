@@ -9,9 +9,9 @@ DEFINE_CLASS(UTexture, UObject)
 
 bool UTexture::LoadFromFile(const FString& InFilePath, ID3D11Device* InDevice)
 {
-    FilePath = InFilePath;
+    FilePath = FPaths::NormalizeProjectPath(InFilePath);
 
-    FWString FullPath = FPaths::Combine(FPaths::RootDir(), FPaths::ToWide(InFilePath));
+    FWString FullPath = FPaths::ToAbsolute(FPaths::ToWide(FilePath));
 
     HRESULT hr;
     if (FullPath.size() >= 4 && FullPath.substr(FullPath.size() - 4) == L".dds")
@@ -25,7 +25,7 @@ bool UTexture::LoadFromFile(const FString& InFilePath, ID3D11Device* InDevice)
 
     if (FAILED(hr))
     {
-        UE_LOG("Failed to load texture: %s", InFilePath.c_str());
+        UE_LOG("Failed to load texture: %s", FilePath.c_str());
         return false;
     }
 

@@ -143,12 +143,17 @@ static bool SeekToBinaryOffset(std::ifstream& In, uint64 Offset)
     return In.good();
 }
 
+static std::filesystem::path MakeFileSystemPath(const FString& Path)
+{
+    return std::filesystem::path(FPaths::ToAbsolute(FPaths::ToWide(Path)));
+}
+
 /* Time Checker */
 static uint64 GetFileWriteTimeTicks(const FString& Path)
 {
     namespace fs = std::filesystem;
 
-    fs::path FilePath(FPaths::ToWide(Path));
+    fs::path FilePath = MakeFileSystemPath(Path);
     if (!fs::exists(FilePath))
     {
         return 0;
@@ -756,7 +761,7 @@ void FBinarySerializer::WriteMaterialParamValue(
             }
         }
 
-        WriteString(Out, TexturePath);
+        WriteString(Out, FPaths::NormalizeProjectPath(TexturePath));
         break;
     }
     }
@@ -875,6 +880,7 @@ bool FBinarySerializer::ReadMaterialParamValue(
         {
             return false;
         }
+        OutTexturePath = FPaths::NormalizeProjectPath(OutTexturePath);
         OutValue = FMaterialParamValue(static_cast<UTexture*>(nullptr));
         break;
     }
@@ -887,7 +893,8 @@ void FBinarySerializer::WriteSkeletalDependencyChunk(
     const FString& SourcePath,
     const FSkeletalMesh& Data)
 {
-    const FString& SkeletonAssetPath = Data.SkeletonAssetPath.empty() ? SourcePath : Data.SkeletonAssetPath;
+    const FString SkeletonAssetPath = FPaths::NormalizeProjectPath(
+        Data.SkeletonAssetPath.empty() ? SourcePath : Data.SkeletonAssetPath);
     WriteString(Out, SkeletonAssetPath);
     WriteString(Out, Data.FilePathName);
     WriteInt32LE(Out, Data.SourceNodeIndex);
@@ -921,6 +928,7 @@ bool FBinarySerializer::ReadSkeletalDependencyChunk(
     {
         return false;
     }
+    OutData.SkeletonAssetPath = FPaths::NormalizeProjectPath(OutData.SkeletonAssetPath);
 
     if (!ReadString(In, OutData.FilePathName))
     {
@@ -1456,7 +1464,7 @@ bool FBinarySerializer::ReadSkeletalSceneChunk(std::ifstream& In, FSkeletalMesh&
 //	보내는 순서와 읽는 순서는 동일 (Header + Body 순서를 고정 -> protocol의 정의)
 bool FBinarySerializer::SaveStaticMesh(const FString& BinaryPath, const FString& SourcePath, const FStaticMesh& Data)
 {
-    std::ofstream Out(BinaryPath, std::ios::binary);
+    std::ofstream Out(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!Out.is_open())
     {
         return false;
@@ -1499,7 +1507,7 @@ bool FBinarySerializer::SaveStaticMesh(const FString& BinaryPath, const FString&
 
 bool FBinarySerializer::LoadStaticMesh(const FString& BinaryPath, FStaticMesh& OutData)
 {
-    std::ifstream In(BinaryPath, std::ios::binary);
+    std::ifstream In(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!In.is_open())
     {
         return false;
@@ -1575,7 +1583,7 @@ bool FBinarySerializer::LoadStaticMesh(const FString& BinaryPath, FStaticMesh& O
 
 bool FBinarySerializer::ReadStaticMeshHeader(const FString& BinaryPath, FStaticMeshBinaryHeader& OutHeader) const
 {
-    std::ifstream In(BinaryPath, std::ios::binary);
+    std::ifstream In(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!In.is_open())
     {
         return false;
@@ -1604,7 +1612,7 @@ bool FBinarySerializer::SaveSkeletalMesh(
     const FString& SourcePath,
     const FSkeletalMesh& Data)
 {
-    std::ofstream Out(BinaryPath, std::ios::binary);
+    std::ofstream Out(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!Out.is_open())
     {
         return false;
@@ -1652,7 +1660,7 @@ bool FBinarySerializer::SaveSkeletalMesh(
 
 bool FBinarySerializer::LoadSkeletalMesh(const FString& BinaryPath, FSkeletalMesh& OutData)
 {
-    std::ifstream In(BinaryPath, std::ios::binary);
+    std::ifstream In(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!In.is_open())
     {
         return false;
@@ -1715,7 +1723,7 @@ bool FBinarySerializer::ReadSkeletalMeshHeader(
     const FString& BinaryPath,
     FSkeletalMeshBinaryHeader& OutHeader) const
 {
-    std::ifstream In(BinaryPath, std::ios::binary);
+    std::ifstream In(MakeFileSystemPath(BinaryPath), std::ios::binary);
     if (!In.is_open())
     {
         return false;

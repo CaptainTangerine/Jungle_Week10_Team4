@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "Core/Paths.h"
 #include "Core/ResourceManager.h"
 
 DEFINE_CLASS(USkeletalMeshComponent, USkinnedMeshComponent)
@@ -12,7 +13,7 @@ void USkeletalMeshComponent::PostDuplicate(UObject* Original)
     USkinnedMeshComponent::PostDuplicate(Original);
 
     const USkeletalMeshComponent* Orig = Cast<USkeletalMeshComponent>(Original);
-    SkeletalMeshAssetPath = Orig ? Orig->SkeletalMeshAssetPath : FString();
+    SkeletalMeshAssetPath = Orig ? FPaths::NormalizeProjectPath(Orig->SkeletalMeshAssetPath) : FString();
     SkeletalMeshIndex = Orig ? Orig->SkeletalMeshIndex : 0;
 }
 
@@ -33,7 +34,7 @@ void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
         return;
     }
 
-    SkeletalMeshAssetPath = InSkeletalMesh->GetAssetPathFileName();
+    SkeletalMeshAssetPath = FPaths::NormalizeProjectPath(InSkeletalMesh->GetAssetPathFileName());
     SkeletalMeshIndex = InSkeletalMesh->GetSourceSceneSkeletalMeshIndex();
 }
 
@@ -52,6 +53,11 @@ void USkeletalMeshComponent::PostEditProperty(const char* PropertyName)
 
 void USkeletalMeshComponent::SerializeSkeletalMeshAsset(FArchive& Ar)
 {
+    if (!Ar.IsLoading())
+    {
+        SkeletalMeshAssetPath = FPaths::NormalizeProjectPath(SkeletalMeshAssetPath);
+    }
+
     Ar << "SkeletalMesh" << SkeletalMeshAssetPath;
     Ar << "SkeletalMeshIndex" << SkeletalMeshIndex;
 
@@ -60,6 +66,7 @@ void USkeletalMeshComponent::SerializeSkeletalMeshAsset(FArchive& Ar)
         return;
     }
 
+    SkeletalMeshAssetPath = FPaths::NormalizeProjectPath(SkeletalMeshAssetPath);
     TArray<UMaterialInterface*> SavedMaterials = Materials;
     ReloadSkeletalMeshFromAssetPath();
     RestoreSavedOverrideMaterials(SavedMaterials);
@@ -90,6 +97,7 @@ void USkeletalMeshComponent::ReloadSkeletalMeshFromAssetPath()
         SkeletalMeshIndex = 0;
     }
 
+    SkeletalMeshAssetPath = FPaths::NormalizeProjectPath(SkeletalMeshAssetPath);
     USkeletalMesh* Mesh = FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath, SkeletalMeshIndex);
     SetSkeletalMesh(Mesh);
 }

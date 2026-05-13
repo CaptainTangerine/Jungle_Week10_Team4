@@ -27,10 +27,10 @@ namespace
         const FSkeletalMeshMaterialSlot& Slot,
         int32 SlotIndex)
     {
-        FString SourceKey = Mesh.SkeletonAssetPath;
+        FString SourceKey = FPaths::NormalizeProjectPath(Mesh.SkeletonAssetPath);
         if (SourceKey.empty())
         {
-            SourceKey = Mesh.FilePathName;
+            SourceKey = FPaths::NormalizeProjectPath(Mesh.FilePathName);
         }
         if (SourceKey.empty())
         {
@@ -72,6 +72,7 @@ namespace
 
         if (!TexturePath.empty())
         {
+            TexturePath = FPaths::NormalizeProjectPath(TexturePath);
             if (UTexture* Texture = ResourceManager.LoadTexture(TexturePath, ResourceManager.GetCachedDevice()))
             {
                 return Texture;
@@ -523,7 +524,8 @@ FString FResourceManager::MakeSkeletalMeshBinaryPath(const FString& SourcePath, 
 {
     namespace fs = std::filesystem;
 
-    fs::path SourceFsPath(FPaths::ToWide(SourcePath));
+    const FString SourceAssetPath = FPaths::NormalizeProjectPath(SourcePath);
+    fs::path SourceFsPath(FPaths::ToWide(SourceAssetPath));
     fs::path BinDir = fs::path(FPaths::RootDir()) / "Asset" / "Mesh" / "Bin";
 
     if (!fs::exists(BinDir))
@@ -2544,6 +2546,13 @@ bool FResourceManager::DeserializeMaterial(const FString& MatFilePath)
 UTexture* FResourceManager::GetTexture(const FString& Path) const
 {
     auto It = Textures.find(Path);
+    if (It != Textures.end())
+    {
+        return It->second;
+    }
+
+    const FString TexturePath = FPaths::NormalizeProjectPath(Path);
+    It = Textures.find(TexturePath);
     return (It != Textures.end()) ? It->second : nullptr;
 }
 
@@ -2554,18 +2563,20 @@ UTexture* FResourceManager::LoadTexture(const FString& Path, ID3D11Device* Devic
         Device = CachedDevice.Get();
     }
 
-    if (UTexture* Cached = GetTexture(Path))
+    const FString TexturePath = FPaths::NormalizeProjectPath(Path);
+
+    if (UTexture* Cached = GetTexture(TexturePath))
     {
         return Cached;
     }
 
     UTexture* Texture = UObjectManager::Get().CreateObject<UTexture>();
-    if (!Texture->LoadFromFile(Path, Device))
+    if (!Texture->LoadFromFile(TexturePath, Device))
     {
         return nullptr;
     }
 
-    Textures[Path] = Texture;
+    Textures[TexturePath] = Texture;
     return Texture;
 }
 
@@ -2880,24 +2891,25 @@ void FResourceManager::RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh)
 
 USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 MeshIndex)
 {
-    const std::filesystem::path InputPath(FPaths::ToWide(Path));
+    const FString SourcePath = FPaths::NormalizeProjectPath(Path);
+    const std::filesystem::path InputPath(FPaths::ToWide(SourcePath));
     const bool bBinaryPath = InputPath.extension() == L".skmesh";
     const FString CacheKey = bBinaryPath
-        ? Path
-        : (MeshIndex == 0 ? Path : (Path + "|skel" + std::to_string(MeshIndex)));
+        ? SourcePath
+        : (MeshIndex == 0 ? SourcePath : (SourcePath + "|skel" + std::to_string(MeshIndex)));
 
     if (USkeletalMesh* FoundMesh = FindSkeletalMesh(CacheKey))
     {
         return FoundMesh;
     }
 
-    const FString BinaryPath = bBinaryPath ? Path : MakeSkeletalMeshBinaryPath(Path, MeshIndex);
+    const FString BinaryPath = bBinaryPath ? SourcePath : MakeSkeletalMeshBinaryPath(SourcePath, MeshIndex);
 
     FSkeletalMesh* LoadedMeshData = nullptr;
     double BinaryLoadSec = 0.0;
     double FbxLoadSec = 0.0;
 
-    if (bBinaryPath || IsSkeletalMeshBinaryValid(Path, BinaryPath))
+    if (bBinaryPath || IsSkeletalMeshBinaryValid(SourcePath, BinaryPath))
     {
         const auto BinaryStart = std::chrono::steady_clock::now();
 
@@ -2917,13 +2929,13 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
         const auto FbxStart = std::chrono::steady_clock::now();
 
         FFBXImporter Importer;
-        FFBXImportScene ImportScene = Importer.Import(Path);
+        FFBXImportScene ImportScene = Importer.Import(SourcePath);
         if (MeshIndex >= 0 && MeshIndex < static_cast<int32>(ImportScene.SkeletalMeshes.size()))
         {
             LoadedMeshData = Importer.CreateSkeletalMeshFromtImportData(ImportScene.SkeletalMeshes[MeshIndex]);
             if (LoadedMeshData != nullptr)
             {
-                LoadedMeshData->SkeletonAssetPath = Path;
+                LoadedMeshData->SkeletonAssetPath = SourcePath;
                 Importer.AttachSceneDataToSkeletalMesh(ImportScene, MeshIndex, *LoadedMeshData);
             }
         }
@@ -2933,14 +2945,14 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
 
         if (LoadedMeshData == nullptr)
         {
-            UE_LOG("[SkeletalMeshLoad] Failed | Path=%s | BinarySec=%.6f | FbxSec=%.6f", Path.c_str(), BinaryLoadSec, FbxLoadSec);
+            UE_LOG("[SkeletalMeshLoad] Failed | Path=%s | BinarySec=%.6f | FbxSec=%.6f", SourcePath.c_str(), BinaryLoadSec, FbxLoadSec);
             return nullptr;
         }
 
-        const bool bSaveBinaryOk = BinarySerializer.SaveSkeletalMesh(BinaryPath, Path, *LoadedMeshData);
+        const bool bSaveBinaryOk = BinarySerializer.SaveSkeletalMesh(BinaryPath, SourcePath, *LoadedMeshData);
         UE_LOG(
             "[SkeletalMeshLoad] Source=FBX | Path=%s | FbxSec=%.6f | BinarySave=%s | BinaryPath=%s",
-            Path.c_str(),
+            SourcePath.c_str(),
             FbxLoadSec,
             bSaveBinaryOk ? "OK" : "FAIL",
             BinaryPath.c_str());
@@ -2949,7 +2961,7 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
     {
         UE_LOG(
             "[SkeletalMeshLoad] Source=Binary | Path=%s | BinarySec=%.6f | BinaryPath=%s",
-            Path.c_str(),
+            SourcePath.c_str(),
             BinaryLoadSec,
             BinaryPath.c_str());
     }
@@ -2971,6 +2983,13 @@ USkeletalMesh* FResourceManager::LoadSkeletalMesh(const FString& Path, int32 Mes
 USkeletalMesh* FResourceManager::FindSkeletalMesh(const FString& Path) const
 {
     auto It = SkeletalMeshes.find(Path);
+    if (It != SkeletalMeshes.end())
+    {
+        return It->second;
+    }
+
+    const FString MeshPath = FPaths::NormalizeProjectPath(Path);
+    It = SkeletalMeshes.find(MeshPath);
     if (It == SkeletalMeshes.end())
     {
         return nullptr;

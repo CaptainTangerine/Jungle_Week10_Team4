@@ -133,7 +133,8 @@ namespace
     {
         namespace fs = std::filesystem;
 
-        fs::path SourceFsPath(FPaths::ToWide(SourcePath));
+        const FString SourceAssetPath = FPaths::NormalizeProjectPath(SourcePath);
+        fs::path SourceFsPath(FPaths::ToWide(SourceAssetPath));
         fs::path BinDir = fs::path(FPaths::RootDir()) / "Asset" / "Mesh" / "Bin";
 
         if (!fs::exists(BinDir))
@@ -595,7 +596,7 @@ namespace
         if (OutScene.SkeletalMeshes.empty() && OutScene.StaticMeshes.empty() &&
             AppendCachedSceneToImportScene(Mesh, bImportSkinnedMeshesAsStatic, OutScene))
         {
-            OutScene.SourceFilePath = SceneSourcePath;
+            OutScene.SourceFilePath = FPaths::NormalizeProjectPath(SceneSourcePath);
             return true;
         }
 
@@ -607,7 +608,7 @@ namespace
         {
             AppendSkeletalMeshToImportScene(Mesh, GetPathStemName(BinaryPath), OutScene, 0);
         }
-        OutScene.SourceFilePath = SceneSourcePath;
+        OutScene.SourceFilePath = FPaths::NormalizeProjectPath(SceneSourcePath);
         return true;
     }
 
@@ -623,11 +624,12 @@ namespace
         OutScene = FFBXImportScene{};
         OutLoadSec = 0.0;
 
-        const fs::path InputFsPath(FPaths::ToWide(InputPath));
+        const FString SourcePath = FPaths::NormalizeProjectPath(InputPath);
+        const fs::path InputFsPath(FPaths::ToWide(SourcePath));
         const bool bInputIsSkeletalBinary = InputFsPath.extension() == L".skmesh";
 
         FFBXImportNode RootNode = {};
-        RootNode.Name = BuildImportedActorName(InputPath);
+        RootNode.Name = BuildImportedActorName(SourcePath);
         RootNode.LocalTransformMatrix = FMatrix::Identity;
         RootNode.GlobalTransformMatrix = FMatrix::Identity;
         AddImportSceneNode(OutScene, -1, RootNode);
@@ -635,8 +637,8 @@ namespace
         if (bInputIsSkeletalBinary)
         {
             if (!LoadSkeletalMeshBinaryIntoScene(
-                    InputPath,
-                    InputPath,
+                    SourcePath,
+                    SourcePath,
                     BinarySerializer,
                     OutScene,
                     bImportSkinnedMeshesAsStatic,
@@ -651,15 +653,15 @@ namespace
         bool bLoadedAnyMesh = false;
         for (int32 MeshIndex = 0; MeshIndex < 1024; ++MeshIndex)
         {
-            const FString BinaryPath = MakeSkeletalMeshBinaryPath(InputPath, MeshIndex);
-            if (!IsSkeletalMeshBinaryValid(InputPath, BinaryPath, BinarySerializer))
+            const FString BinaryPath = MakeSkeletalMeshBinaryPath(SourcePath, MeshIndex);
+            if (!IsSkeletalMeshBinaryValid(SourcePath, BinaryPath, BinarySerializer))
             {
                 break;
             }
 
             if (!LoadSkeletalMeshBinaryIntoScene(
                     BinaryPath,
-                    InputPath,
+                    SourcePath,
                     BinarySerializer,
                     OutScene,
                     bImportSkinnedMeshesAsStatic,
@@ -696,11 +698,12 @@ namespace
         FBinarySerializer& BinarySerializer,
         FSkeletalMeshBinaryCacheStats& CacheStats)
     {
-        const std::filesystem::path SourceFsPath(FPaths::ToWide(SourcePath));
+        const FString SourceAssetPath = FPaths::NormalizeProjectPath(SourcePath);
+        const std::filesystem::path SourceFsPath(FPaths::ToWide(SourceAssetPath));
         const bool bSourceIsSkeletalBinary = SourceFsPath.extension() == L".skmesh";
-        const FString BinaryPath = bSourceIsSkeletalBinary ? SourcePath : MakeSkeletalMeshBinaryPath(SourcePath, MeshIndex);
+        const FString BinaryPath = bSourceIsSkeletalBinary ? SourceAssetPath : MakeSkeletalMeshBinaryPath(SourceAssetPath, MeshIndex);
 
-        if (bSourceIsSkeletalBinary || IsSkeletalMeshBinaryValid(SourcePath, BinaryPath, BinarySerializer))
+        if (bSourceIsSkeletalBinary || IsSkeletalMeshBinaryValid(SourceAssetPath, BinaryPath, BinarySerializer))
         {
             const auto BinaryStart = std::chrono::steady_clock::now();
             FSkeletalMesh* LoadedMesh = new FSkeletalMesh();
@@ -712,7 +715,7 @@ namespace
                 ++CacheStats.LoadedCount;
                 UE_LOG(
                     "[SkeletalMeshLoad] Source=Binary | Path=%s | MeshIndex=%d | BinarySec=%.6f | BinaryPath=%s",
-                    SourcePath.c_str(),
+                    SourceAssetPath.c_str(),
                     MeshIndex,
                     BinaryLoadSec,
                     BinaryPath.c_str());
@@ -723,7 +726,7 @@ namespace
             ++CacheStats.FailedCount;
             UE_LOG(
                 "[SkeletalMeshLoad] Binary load failed | Path=%s | MeshIndex=%d | BinaryPath=%s",
-                SourcePath.c_str(),
+                SourceAssetPath.c_str(),
                 MeshIndex,
                 BinaryPath.c_str());
         }
@@ -742,23 +745,23 @@ namespace
             ++CacheStats.FailedCount;
             UE_LOG(
                 "[SkeletalMeshLoad] Failed | Path=%s | MeshIndex=%d | CookSec=%.6f | BinaryPath=%s",
-                SourcePath.c_str(),
+                SourceAssetPath.c_str(),
                 MeshIndex,
                 CookSec,
                 BinaryPath.c_str());
             return nullptr;
         }
 
-        RawMesh->SkeletonAssetPath = SourcePath;
+        RawMesh->SkeletonAssetPath = SourceAssetPath;
         Importer.AttachSceneDataToSkeletalMesh(ImportScene, MeshIndex, *RawMesh);
         RestoreSkeletalMeshSlotMaterials(*RawMesh);
 
-        if (BinarySerializer.SaveSkeletalMesh(BinaryPath, SourcePath, *RawMesh))
+        if (BinarySerializer.SaveSkeletalMesh(BinaryPath, SourceAssetPath, *RawMesh))
         {
             ++CacheStats.SavedCount;
             UE_LOG(
                 "[SkeletalMeshLoad] Source=FBX | Path=%s | MeshIndex=%d | CookSec=%.6f | BinarySave=OK | BinaryPath=%s",
-                SourcePath.c_str(),
+                SourceAssetPath.c_str(),
                 MeshIndex,
                 CookSec,
                 BinaryPath.c_str());
@@ -768,7 +771,7 @@ namespace
             ++CacheStats.FailedCount;
             UE_LOG(
                 "[SkeletalMeshLoad] Source=FBX | Path=%s | MeshIndex=%d | CookSec=%.6f | BinarySave=FAIL | BinaryPath=%s",
-                SourcePath.c_str(),
+                SourceAssetPath.c_str(),
                 MeshIndex,
                 CookSec,
                 BinaryPath.c_str());
@@ -945,6 +948,7 @@ bool FEditorFBXSceneViewWidget::OpenFBXFileDialog(FString& OutFilePath) const
 void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 {
     const auto TotalStart = std::chrono::steady_clock::now();
+    const FString SourcePath = FPaths::NormalizeProjectPath(FilePath);
 
     ImportScene = FFBXImportScene{};
     SelectedNodeIndex = -1;
@@ -955,12 +959,12 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     {
         FBXClient->ClearBoneSelection();
     }
-    LoadedFilePath = FilePath;
+    LoadedFilePath = SourcePath;
 
     FBinarySerializer BinarySerializer;
     double BinarySceneLoadSec = 0.0;
     if (TryLoadSkeletalMeshSceneFromBinary(
-            FilePath,
+            SourcePath,
             BinarySerializer,
             ImportScene,
             bImportSkinnedMeshesAsStatic,
@@ -970,7 +974,7 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
         StatusMessage = FString("SKMesh scene loaded. BinarySec=") + std::to_string(BinarySceneLoadSec);
         UE_LOG(
             "[SkeletalMeshSceneLoad] Source=Binary | Path=%s | BinarySec=%.6f | Nodes=%d | SkeletalMesh=%d",
-            FilePath.c_str(),
+            SourcePath.c_str(),
             BinarySceneLoadSec,
             static_cast<int32>(ImportScene.Nodes.size()),
             static_cast<int32>(ImportScene.SkeletalMeshes.size()));
@@ -984,7 +988,7 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
         const double TotalSec = GetElapsedSeconds(TotalStart);
         UE_LOG(
             "[SkeletalMeshSpawnComplete] Source=Binary | Path=%s | TotalSec=%.6f | SceneLoadSec=%.6f | SpawnSec=%.6f | Nodes=%d | StaticMesh=%d | SkeletalMesh=%d",
-            FilePath.c_str(),
+            SourcePath.c_str(),
             TotalSec,
             BinarySceneLoadSec,
             SpawnSec,
@@ -994,7 +998,7 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
         return;
     }
 
-    const std::filesystem::path InputFsPath(FPaths::ToWide(FilePath));
+    const std::filesystem::path InputFsPath(FPaths::ToWide(SourcePath));
     if (InputFsPath.extension() == L".skmesh")
     {
         StatusMessage = "Failed to load SKMesh binary scene.";
@@ -1005,7 +1009,7 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     FFBXImportOptions Options = {};
     Options.bImportSkinnedMeshesAsStatic = bImportSkinnedMeshesAsStatic;
     const auto ImportStart = std::chrono::steady_clock::now();
-    ImportScene = Importer.Import(FilePath, Options);
+    ImportScene = Importer.Import(SourcePath, Options);
     const double ImportSec = GetElapsedSeconds(ImportStart);
     if (ImportScene.Nodes.empty())
     {
@@ -1025,7 +1029,7 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     const double TotalSec = GetElapsedSeconds(TotalStart);
     UE_LOG(
         "[SkeletalMeshSpawnComplete] Source=FBX | Path=%s | TotalSec=%.6f | ImportSec=%.6f | SpawnSec=%.6f | Nodes=%d | StaticMesh=%d | SkeletalMesh=%d",
-        FilePath.c_str(),
+        SourcePath.c_str(),
         TotalSec,
         ImportSec,
         SpawnSec,
