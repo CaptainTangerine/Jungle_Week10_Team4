@@ -35,6 +35,9 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
     SelectionManager.Init();
     ViewportLayout.Init(InWindow, GetWorld(), &SelectionManager, this);
 
+
+    FBXPreviewViewport.Initialize(InWindow);
+
     GetFocusedWorld()->SetActiveCamera(GetCamera());
 
     // Slate 초기화 및 Viewport Layout 추가
@@ -44,6 +47,10 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
 
     // Editor용 렌더 파이프라인 세팅
     SetRenderPipeline(std::make_unique<FEditorRenderPipeline>(this, Renderer));
+
+    // FBX Preview Viewport 초기화
+    FBXPreviewViewport.Initialize(InWindow);
+    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 }
 
 void UEditorEngine::Shutdown()
