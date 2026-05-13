@@ -30,6 +30,11 @@
 
 namespace
 {
+    double GetElapsedSeconds(std::chrono::steady_clock::time_point StartTime)
+    {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - StartTime).count();
+    }
+
     void SetOpaqueBlendStateCallback(const ImDrawList*, const ImDrawCmd* Cmd)
     {
         ID3D11DeviceContext* DeviceContext = static_cast<ID3D11DeviceContext*>(Cmd->UserCallbackData);
@@ -939,6 +944,8 @@ bool FEditorFBXSceneViewWidget::OpenFBXFileDialog(FString& OutFilePath) const
 
 void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 {
+    const auto TotalStart = std::chrono::steady_clock::now();
+
     ImportScene = FFBXImportScene{};
     SelectedNodeIndex = -1;
     SelectedSkeletalMeshIndex = -1;
@@ -971,7 +978,19 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
         {
             CollapseStaticMeshesToSingleComponent(ImportScene);
         }
+        const auto SpawnStart = std::chrono::steady_clock::now();
         SpawnImportedFBXMeshActors();
+        const double SpawnSec = GetElapsedSeconds(SpawnStart);
+        const double TotalSec = GetElapsedSeconds(TotalStart);
+        UE_LOG(
+            "[SkeletalMeshSpawnComplete] Source=Binary | Path=%s | TotalSec=%.6f | SceneLoadSec=%.6f | SpawnSec=%.6f | Nodes=%d | StaticMesh=%d | SkeletalMesh=%d",
+            FilePath.c_str(),
+            TotalSec,
+            BinarySceneLoadSec,
+            SpawnSec,
+            static_cast<int32>(ImportScene.Nodes.size()),
+            static_cast<int32>(ImportScene.StaticMeshes.size()),
+            static_cast<int32>(ImportScene.SkeletalMeshes.size()));
         return;
     }
 
@@ -985,7 +1004,9 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     FFBXImporter Importer;
     FFBXImportOptions Options = {};
     Options.bImportSkinnedMeshesAsStatic = bImportSkinnedMeshesAsStatic;
+    const auto ImportStart = std::chrono::steady_clock::now();
     ImportScene = Importer.Import(FilePath, Options);
+    const double ImportSec = GetElapsedSeconds(ImportStart);
     if (ImportScene.Nodes.empty())
     {
         StatusMessage = "Failed to import FBX scene.";
@@ -998,7 +1019,19 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
         CollapseStaticMeshesToSingleComponent(ImportScene);
     }
     StatusMessage = "FBX import scene loaded.";
+    const auto SpawnStart = std::chrono::steady_clock::now();
     SpawnImportedFBXMeshActors();
+    const double SpawnSec = GetElapsedSeconds(SpawnStart);
+    const double TotalSec = GetElapsedSeconds(TotalStart);
+    UE_LOG(
+        "[SkeletalMeshSpawnComplete] Source=FBX | Path=%s | TotalSec=%.6f | ImportSec=%.6f | SpawnSec=%.6f | Nodes=%d | StaticMesh=%d | SkeletalMesh=%d",
+        FilePath.c_str(),
+        TotalSec,
+        ImportSec,
+        SpawnSec,
+        static_cast<int32>(ImportScene.Nodes.size()),
+        static_cast<int32>(ImportScene.StaticMeshes.size()),
+        static_cast<int32>(ImportScene.SkeletalMeshes.size()));
 }
 
 void FEditorFBXSceneViewWidget::Render(float DeltaTime)
