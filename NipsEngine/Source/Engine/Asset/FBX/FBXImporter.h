@@ -103,8 +103,29 @@ public:
         FSkeletalMesh& OutMesh) const;
 
 private:
+    struct FPendingSkinnedMeshNode
+    {
+        FbxNode* Node = nullptr;
+        FbxMesh* Mesh = nullptr;
+        FbxNode* SkeletonRoot = nullptr;
+        int32 SceneNodeIndex = -1;
+    };
+
     void TraversalNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene);
     int32 AddImportNode(FbxNode* Node, int32 ParentIndex, OUT FFBXImportScene& OutImportScene);
+    void BuildGroupedSkeletalMeshes(OUT FFBXImportScene& OutImportScene);
+    void BuildBakedSceneStaticMesh(OUT FFBXImportScene& OutImportScene);
+    void BuildGroupedSkinnedStaticMeshes(OUT FFBXImportScene& OutImportScene);
+    bool BuildSkeletalMeshGroupImportData(
+        const TArray<FPendingSkinnedMeshNode>& MeshNodes,
+        OUT FFBXSkeletalMeshImportData& OutMeshData);
+    bool MergeSkinnedGroupToStatic(
+        const TArray<FPendingSkinnedMeshNode>& MeshNodes,
+        OUT FFBXStaticMeshImportData& OutMeshData);
+    void AppendRawDataToStaticMesh(
+        const FFBXMeshRawData& RawData,
+        const FMatrix& LocalToBakedRoot,
+        OUT FFBXStaticMeshImportData& OutMeshData) const;
 
     /* Mesh 구조체를 채우기 위한 중간 데이터 */
     bool BuildMeshRawData(FbxNode* Node, FbxMesh* Mesh, OUT FFBXMeshRawData& OutRawData);
@@ -118,11 +139,16 @@ private:
 
     void BuildBoneTable(FbxMesh* Mesh , OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     bool IsSkeletonNode(FbxNode* Node) const;
+    FbxNode* FindSkeletonRootForMesh(FbxNode* MeshNode, FbxMesh* Mesh) const;
     int32 FindRegisteredBoneParentIndex(FbxNode* Node) const;
     FMatrix CalculateBoneLocalBindTransform(FbxNode* BoneNode, const FMatrix& BoneBindMesh, const FFBXSkeletalMeshImportData& MeshData) const;
     int32 RegisterBone(FbxNode* BoneNode, FbxCluster* Cluster, const FMatrix& MeshBindGlobal, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
+    int32 RegisterBoneForGroup(FbxNode* BoneNode, FbxCluster* Cluster, const FMatrix& GroupGlobalInverse, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
+    void BuildBoneTableForGroup(const TArray<FPendingSkinnedMeshNode>& MeshNodes, const FMatrix& GroupGlobalInverse, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     void BuildBoneWeight(FbxMesh* Mesh, const TArray<int32>& VertexControlPointsIndices, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
+    void ApplyBoneWeightForMesh(FbxMesh* Mesh, const TArray<int32>& VertexControlPointsIndices, int32 VertexBaseIndex, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
     void BuildBoneHierarchy(FbxMesh* Mesh, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
+    void BuildBoneHierarchyForGroup(const TArray<FPendingSkinnedMeshNode>& MeshNodes, OUT FFBXSkeletalMeshImportData& OutMeshDatas);
 
 
     FAABB BuildLocalBounds(const FFBXStaticMeshImportData& ImportData) const;
@@ -143,6 +169,8 @@ private:
     FString ImportDirectory;
     FFBXImportOptions ImportOptions;
 
+    TArray<FPendingSkinnedMeshNode> PendingSkinnedMeshNodes;
+    TMap<uint64, int32> FbxNodeIdToImportNodeIndex;
     TMap<uint64, int32> BoneIdToIndex;
     TMap<int32, TArray<FBoneIndexWeight>> IndexWeightMap;
 

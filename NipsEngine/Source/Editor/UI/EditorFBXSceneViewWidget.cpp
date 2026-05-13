@@ -276,6 +276,100 @@ namespace
         return ImportData;
     }
 
+    void AppendStaticImportDataToBakedMesh(
+        const FFBXStaticMeshImportData& SourceMesh,
+        const FMatrix& LocalToBakedRoot,
+        FFBXStaticMeshImportData& OutMesh)
+    {
+        const uint32 VertexBase = static_cast<uint32>(OutMesh.Vertices.size());
+        const uint32 IndexBase = static_cast<uint32>(OutMesh.Indices.size());
+        const int32 MaterialBase = static_cast<int32>(OutMesh.MaterialSlots.size());
+        const FMatrix NormalToBakedRoot = LocalToBakedRoot.GetInverse().GetTransposed();
+
+        OutMesh.Vertices.reserve(OutMesh.Vertices.size() + SourceMesh.Vertices.size());
+        for (const FNormalVertex& Src : SourceMesh.Vertices)
+        {
+            FNormalVertex Dst = Src;
+            Dst.Position = LocalToBakedRoot.TransformPosition(Src.Position);
+            Dst.Normal = NormalToBakedRoot.TransformVector(Src.Normal).GetSafeNormal();
+            Dst.Tangent = LocalToBakedRoot.TransformVector(Src.Tangent).GetSafeNormal();
+            Dst.Bitangent = LocalToBakedRoot.TransformVector(Src.Bitangent).GetSafeNormal();
+            OutMesh.Vertices.push_back(Dst);
+        }
+
+        OutMesh.Indices.reserve(OutMesh.Indices.size() + SourceMesh.Indices.size());
+        for (uint32 Index : SourceMesh.Indices)
+        {
+            OutMesh.Indices.push_back(VertexBase + Index);
+        }
+
+        OutMesh.MaterialSlots.insert(
+            OutMesh.MaterialSlots.end(),
+            SourceMesh.MaterialSlots.begin(),
+            SourceMesh.MaterialSlots.end());
+
+        OutMesh.Sections.reserve(OutMesh.Sections.size() + SourceMesh.Sections.size());
+        for (const FStaticMeshSection& SourceSection : SourceMesh.Sections)
+        {
+            FStaticMeshSection Section = {};
+            Section.StartIndex = IndexBase + SourceSection.StartIndex;
+            Section.IndexCount = SourceSection.IndexCount;
+            Section.MaterialSlotIndex = MaterialBase + SourceSection.MaterialSlotIndex;
+            OutMesh.Sections.push_back(Section);
+        }
+    }
+
+    void CollapseStaticMeshesToSingleComponent(FFBXImportScene& Scene)
+    {
+        if (Scene.Nodes.empty() || Scene.StaticMeshes.size() <= 1)
+        {
+            return;
+        }
+
+        const int32 BakedSourceNodeIndex = 0;
+        const FMatrix BakedRootGlobalInverse = Scene.Nodes[BakedSourceNodeIndex].GlobalTransformMatrix.GetInverse();
+        const TArray<FFBXStaticMeshImportData> SourceMeshes = Scene.StaticMeshes;
+
+        FFBXStaticMeshImportData BakedMesh = {};
+        BakedMesh.SourceNodeIndex = BakedSourceNodeIndex;
+        BakedMesh.Name = Scene.Nodes[BakedSourceNodeIndex].Name.empty()
+            ? FString("BakedSceneStaticMesh")
+            : Scene.Nodes[BakedSourceNodeIndex].Name + FString("_Static");
+
+        for (const FFBXStaticMeshImportData& SourceMesh : SourceMeshes)
+        {
+            if (SourceMesh.Vertices.empty() || SourceMesh.Indices.empty())
+            {
+                continue;
+            }
+
+            FMatrix LocalToBakedRoot = FMatrix::Identity;
+            if (SourceMesh.SourceNodeIndex >= 0 &&
+                SourceMesh.SourceNodeIndex < static_cast<int32>(Scene.Nodes.size()))
+            {
+                LocalToBakedRoot = Scene.Nodes[SourceMesh.SourceNodeIndex].GlobalTransformMatrix * BakedRootGlobalInverse;
+            }
+
+            AppendStaticImportDataToBakedMesh(SourceMesh, LocalToBakedRoot, BakedMesh);
+        }
+
+        for (FFBXImportNode& Node : Scene.Nodes)
+        {
+            Node.StaticMeshIndex = -1;
+            Node.SkeletalMeshIndex = -1;
+        }
+
+        Scene.StaticMeshes.clear();
+        Scene.SkeletalMeshes.clear();
+        if (BakedMesh.Vertices.empty() || BakedMesh.Indices.empty())
+        {
+            return;
+        }
+
+        Scene.StaticMeshes.push_back(BakedMesh);
+        Scene.Nodes[BakedSourceNodeIndex].StaticMeshIndex = 0;
+    }
+
     int32 FindBoneIndexByName(const FSkeletalMesh& Mesh, const FString& BoneName)
     {
         for (int32 BoneIndex = 0; BoneIndex < static_cast<int32>(Mesh.Bones.size()); ++BoneIndex)
@@ -309,13 +403,17 @@ namespace
             OutScene.StaticMeshes.push_back(BuildStaticImportDataFromEmbeddedMesh(EmbeddedStaticMesh));
         }
 
-        int32 SourceNodeIndex = -1;
-        for (int32 NodeIndex = 0; NodeIndex < static_cast<int32>(Mesh.SceneNodes.size()); ++NodeIndex)
+        int32 SourceNodeIndex = Mesh.SourceNodeIndex;
+        if (SourceNodeIndex < 0 || SourceNodeIndex >= static_cast<int32>(Mesh.SceneNodes.size()))
         {
-            if (Mesh.SceneNodes[NodeIndex].SkeletalMeshIndex == Mesh.SourceSceneSkeletalMeshIndex)
+            SourceNodeIndex = -1;
+            for (int32 NodeIndex = 0; NodeIndex < static_cast<int32>(Mesh.SceneNodes.size()); ++NodeIndex)
             {
-                SourceNodeIndex = NodeIndex;
-                break;
+                if (Mesh.SceneNodes[NodeIndex].SkeletalMeshIndex == Mesh.SourceSceneSkeletalMeshIndex)
+                {
+                    SourceNodeIndex = NodeIndex;
+                    break;
+                }
             }
         }
 
@@ -366,6 +464,18 @@ namespace
         if (SourceNodeIndex < 0)
         {
             SourceNodeIndex = OutScene.Nodes.empty() ? -1 : 0;
+        }
+
+        if (SourceNodeIndex >= 0 && SourceNodeIndex < static_cast<int32>(OutScene.Nodes.size()))
+        {
+            if (bImportSkinnedMeshesAsStatic)
+            {
+                OutScene.Nodes[SourceNodeIndex].StaticMeshIndex = StaticSkinnedMeshIndex;
+            }
+            else
+            {
+                OutScene.Nodes[SourceNodeIndex].SkeletalMeshIndex = 0;
+            }
         }
 
         if (!bImportSkinnedMeshesAsStatic)
@@ -856,6 +966,10 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
             BinarySceneLoadSec,
             static_cast<int32>(ImportScene.Nodes.size()),
             static_cast<int32>(ImportScene.SkeletalMeshes.size()));
+        if (bImportSkinnedMeshesAsStatic)
+        {
+            CollapseStaticMeshesToSingleComponent(ImportScene);
+        }
         SpawnImportedFBXMeshActors();
         return;
     }
@@ -878,6 +992,10 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     }
 
     SelectedNodeIndex = 0;
+    if (bImportSkinnedMeshesAsStatic)
+    {
+        CollapseStaticMeshesToSingleComponent(ImportScene);
+    }
     StatusMessage = "FBX import scene loaded.";
     SpawnImportedFBXMeshActors();
 }

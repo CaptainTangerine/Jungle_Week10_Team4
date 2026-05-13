@@ -567,12 +567,22 @@ bool FEditorViewportClient::RequestActorPlacement(float X, float Y, float PopupX
         }
     }
 
-    if (!bHasHit)
+    if (bHasHit)
     {
-        return false;
+        PendingActorPlacementLocation = BestHit.Location;
+    }
+    else
+    {
+        constexpr float FallbackPlacementDistance = 10.0f;
+        FVector FallbackDirection = Ray.Direction.GetSafeNormal();
+        if (FallbackDirection.IsNearlyZero())
+        {
+            FallbackDirection = Camera.GetForwardVector().GetSafeNormal();
+        }
+
+        PendingActorPlacementLocation = Ray.Origin + FallbackDirection * FallbackPlacementDistance;
     }
 
-    PendingActorPlacementLocation = BestHit.Location;
     PendingActorPlacementPopupPos = { static_cast<LONG>(PopupX), static_cast<LONG>(PopupY) };
     bPendingActorPlacement = true;
     return true;
