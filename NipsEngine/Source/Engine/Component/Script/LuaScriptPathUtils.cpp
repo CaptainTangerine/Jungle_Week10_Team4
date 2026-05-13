@@ -19,6 +19,7 @@ namespace
         return ClassName == "AActor"
             || ClassName == "ASceneActor"
             || ClassName == "AStaticMeshActor"
+            || ClassName == "ASkeletalMeshActor"
             || ClassName == "APawn";
     }
 

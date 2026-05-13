@@ -585,6 +585,7 @@ namespace ResourceKey
     constexpr const char* Particle = "Particle";
     constexpr const char* Material = "Material";
     constexpr const char* StaticMesh = "StaticMesh";
+    constexpr const char* SkeletalMesh = "SkeletalMesh";
     constexpr const char* Path = "Path";
     constexpr const char* Columns = "Columns";
     constexpr const char* Rows = "Rows";

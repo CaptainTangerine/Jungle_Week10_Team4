@@ -493,12 +493,14 @@ void FSceneSaveManager::Load(const FString& FilePath, FWorldContext& OutWorldCon
 
     auto GetNormalizedType = [](FString Type) -> FString {
         if (Type == "StaticMeshComp") return "UStaticMeshComponent";
+        if (Type == "SkeletalMeshComp") return "USkeletalMeshComponent";
         return Type;
     };
 
     auto InferActorClass = [](const FString& CompType) -> FString
     {
         if (CompType == "StaticMeshComp" || CompType == "UStaticMeshComponent") return "AStaticMeshActor";
+        if (CompType == "SkeletalMeshComp" || CompType == "USkeletalMeshComponent") return "ASkeletalMeshActor";
         if (CompType.length() > 10 && CompType.substr(CompType.size() - 9) == "Component")
         {
             FString BaseName = CompType.substr(0, CompType.size() - 9);
@@ -718,7 +720,9 @@ void FSceneSaveManager::DeserializePrimitivesToWorld(json::JSON& PrimitivesNode,
     // 타입 문자열로 Actor 클래스 이름 추론
     auto InferActorClass = [](const FString& CompType) -> FString
     {
-        if (CompType.front() == 'U' && CompType.size() > 10 &&
+        if (CompType == "StaticMeshComp" || CompType == "UStaticMeshComponent") return "AStaticMeshActor";
+        if (CompType == "SkeletalMeshComp" || CompType == "USkeletalMeshComponent") return "ASkeletalMeshActor";
+        if (!CompType.empty() && CompType.front() == 'U' && CompType.size() > 10 &&
             CompType.substr(CompType.size() - 9) == "Component")
         {
             return "A" + CompType.substr(1, CompType.size() - 10) + "Actor";
@@ -745,6 +749,7 @@ void FSceneSaveManager::DeserializePrimitivesToWorld(json::JSON& PrimitivesNode,
 
         FString CompType = PrimJSON[SceneKeys::Type].ToString();
         if (CompType == "StaticMeshComp") CompType = "UStaticMeshComponent";
+        if (CompType == "SkeletalMeshComp") CompType = "USkeletalMeshComponent";
 
         USceneComponent* Comp = nullptr;
         if (!ParentComp)

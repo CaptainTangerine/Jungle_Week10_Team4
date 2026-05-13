@@ -39,6 +39,7 @@ namespace
         { "Camera", SpawnActor<ACameraActor> },
         { "Cine Camera", SpawnActor<ACineCameraActor> },
         { "StaticMesh", SpawnActor<AStaticMeshActor> },
+        { "SkeletalMesh", SpawnActor<ASkeletalMeshActor> },
         { "Water", SpawnActor<AWaterActor> },
         { "Global Ocean", SpawnActor<AGlobalOceanActor> },
         { "TextRender", SpawnActor<ATextRenderActor> },

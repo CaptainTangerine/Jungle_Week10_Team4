@@ -203,6 +203,7 @@ namespace
         { "Camera", SpawnActorAt<ACameraActor> },
         { "Cine Camera", SpawnActorAt<ACineCameraActor> },
         { "StaticMesh", SpawnActorAt<AStaticMeshActor> },
+        { "SkeletalMesh", SpawnActorAt<ASkeletalMeshActor> },
         { "Water", SpawnActorAt<AWaterActor> },
         { "Global Ocean", SpawnActorAt<AGlobalOceanActor> },
         { "TextRender", SpawnActorAt<ATextRenderActor> },
