@@ -1,5 +1,6 @@
 ﻿#include "Editor/EditorEngine.h"
 
+#include "Engine/GameFramework/PrimitiveActors.h"
 #include "Engine/Runtime/WindowsWindow.h"
 #include "Engine/Slate/SlateApplication.h"
 #include "Engine/Input/InputSystem.h"
@@ -332,6 +333,11 @@ UWorld* UEditorEngine::EnsureFBXPreviewWorld()
     {
         Ctx.World->SetWorldType(EWorldType::ViewerPreview);
         ApplySpatialIndexMaintenanceSettings(Ctx.World);
+
+        ADirectionalLightActor* DirLight = Ctx.World->SpawnActor<ADirectionalLightActor>();
+        DirLight->SetActorRotation(FVector(-45.f, 45.f, 0.f));
+
+        Ctx.World->SpawnActor<AAmbientLightActor>();
     }
 
     return Ctx.World;
