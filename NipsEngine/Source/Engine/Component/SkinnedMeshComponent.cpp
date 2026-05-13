@@ -164,7 +164,6 @@ void USkinnedMeshComponent::PostDuplicate(UObject* Original)
 
     const USkinnedMeshComponent* Orig = Cast<USkinnedMeshComponent>(Original);
     SkeletalMeshAsset = Orig ? Orig->SkeletalMeshAsset : nullptr;
-    SkeletalMeshAssetPath = Orig ? Orig->SkeletalMeshAssetPath : FString();
 
     ReleaseDynamicSkinResources();
     SkinnedRenderResource.SourceSkeletalMesh = SkeletalMeshAsset;
@@ -176,17 +175,6 @@ void USkinnedMeshComponent::PostDuplicate(UObject* Original)
 void USkinnedMeshComponent::Serialize(FArchive& Ar)
 {
     UMeshComponent::Serialize(Ar);
-    Ar << "SkeletalMesh" << SkeletalMeshAssetPath;
-
-    if (Ar.IsLoading())
-    {
-        USkeletalMesh* LoadedMesh = SkeletalMeshAssetPath.empty()
-            ? nullptr
-            : FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath);
-        SetSkeletalMesh(LoadedMesh);
-        MarkBoundsDirty();
-        MarkRenderStateDirty();
-    }
 }
 
 void USkinnedMeshComponent::SetSkeletalMesh(USkeletalMesh* InSkeletalMesh)
@@ -218,7 +206,6 @@ bool USkinnedMeshComponent::HasValidMesh() const
 void USkinnedMeshComponent::GetEditableProperties(TArray<FPropertyDescriptor>& OutProps)
 {
     UMeshComponent::GetEditableProperties(OutProps);
-    OutProps.push_back({ "SkeletalMesh", EPropertyType::String, &SkeletalMeshAssetPath });
 }
 
 void USkinnedMeshComponent::PostEditProperty(const char* PropertyName)
@@ -227,13 +214,6 @@ void USkinnedMeshComponent::PostEditProperty(const char* PropertyName)
 
     switch (PropertyNameId(PropertyName))
     {
-    case PropertyNameIdConstexpr("SkeletalMesh"):
-        SetSkeletalMesh(SkeletalMeshAssetPath.empty()
-            ? nullptr
-            : FResourceManager::Get().LoadSkeletalMesh(SkeletalMeshAssetPath));
-        MarkRenderStateDirty();
-        return;
-
     case PropertyNameIdConstexpr("Materials"):
         for (int32 i = 0; i < static_cast<int32>(Materials.size()); ++i)
         {

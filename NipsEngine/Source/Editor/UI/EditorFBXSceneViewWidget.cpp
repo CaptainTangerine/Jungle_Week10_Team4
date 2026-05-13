@@ -4,6 +4,7 @@
 #include "Asset/SkeletalMesh.h"
 #include "Component/SceneComponent.h"
 #include "Component/GizmoComponent.h"
+#include "Component/SkeletalMeshComponent.h"
 #include "Component/SkinnedMeshComponent.h"
 #include "Component/StaticMeshComponent.h"
 #include "Core/Paths.h"
@@ -1627,7 +1628,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         USkeletalMesh* SkeletalMeshAsset = UObjectManager::Get().CreateObject<USkeletalMesh>();
         SkeletalMeshAsset->SetMeshData(RawMesh);
 
-        USkinnedMeshComponent* MeshComponent = Actor->AddComponent<USkinnedMeshComponent>();
+        USkeletalMeshComponent* MeshComponent = Actor->AddComponent<USkeletalMeshComponent>();
         MeshComponent->AttachToComponent(RootComponent);
         MeshComponent->SetSkeletalMesh(SkeletalMeshAsset);
 

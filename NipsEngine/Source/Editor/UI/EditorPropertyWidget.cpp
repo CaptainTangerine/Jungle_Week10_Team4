@@ -36,6 +36,7 @@ namespace
 
     constexpr uint32 PropIdTexturePath = PropertyNameIdConstexpr("Texture Path");
     constexpr uint32 PropIdStaticMesh = PropertyNameIdConstexpr("StaticMesh");
+    constexpr uint32 PropIdSkeletalMesh = PropertyNameIdConstexpr("SkeletalMesh");
     constexpr uint32 PropIdScriptPath = PropertyNameIdConstexpr("Script Path");
     constexpr uint32 PropIdFont = PropertyNameIdConstexpr("Font");
     constexpr uint32 PropIdParticle = PropertyNameIdConstexpr("Particle");
@@ -67,6 +68,8 @@ namespace
             return FResourceManager::Get().GetTextureFilePath();
         case PropIdStaticMesh:
             return FResourceManager::Get().GetStaticMeshPaths();
+        case PropIdSkeletalMesh:
+            return FResourceManager::Get().GetSkeletalMeshPaths();
         case PropIdScriptPath:
             return EditorEngine ? EditorEngine->GetLuaScriptSubsystem().GetAvailableScriptPaths() : TArray<FString>{};
         default:

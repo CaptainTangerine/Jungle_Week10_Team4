@@ -539,6 +539,7 @@ void FResourceManager::LoadFromAssetDirectory(const FString& Path)
 {
     //	초기화
     ObjFilePaths.clear();
+    SkeletalMeshFilePaths.clear();
     FontFilePaths.clear();
     TextureFilePaths.clear();
     MaterialFilePaths.clear();
@@ -589,6 +590,10 @@ void FResourceManager::LoadFromAssetDirectory(const FString& Path)
             Resource.bPreload = false;
             Resource.bNormalizeToUnitCube = false;
             StaticMeshRegistry[Resource.Name] = Resource;
+        }
+        else if (Extension == L".fbx")
+        {
+            SkeletalMeshFilePaths.push_back(RelativePath);
         }
         else if (Extension == L".mtl")
         {
@@ -659,6 +664,7 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
     namespace fs = std::filesystem;
 
     ObjFilePaths.clear();
+    SkeletalMeshFilePaths.clear();
     FontFilePaths.clear();
     TextureFilePaths.clear();
     MaterialFilePaths.clear();
@@ -705,6 +711,10 @@ void FResourceManager::RefreshFromAssetDirectory(const FString& Path)
                 Resource.bPreload = false;
                 Resource.bNormalizeToUnitCube = false;
                 StaticMeshRegistry[Resource.Name] = Resource;
+            }
+            else if (Extension == L".fbx")
+            {
+                SkeletalMeshFilePaths.push_back(RelativePath);
             }
             else if (Extension == L".mtl")
             {
@@ -2903,6 +2913,11 @@ USkeletalMesh* FResourceManager::FindSkeletalMesh(const FString& Path) const
     }
 
     return It->second;
+}
+
+TArray<FString> FResourceManager::GetSkeletalMeshPaths() const
+{
+    return SkeletalMeshFilePaths;
 }
 
 TArray<FString> FResourceManager::GetStaticMeshPaths() const

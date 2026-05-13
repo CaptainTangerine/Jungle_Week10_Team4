@@ -29,6 +29,17 @@ const FSkeletalMesh* USkeletalMesh::GetMeshData() const
     return MeshData;
 }
 
+const FString& USkeletalMesh::GetAssetPathFileName() const
+{
+    static FString Empty = {};
+    return MeshData ? MeshData->SkeletonAssetPath : Empty;
+}
+
+int32 USkeletalMesh::GetSourceSceneSkeletalMeshIndex() const
+{
+    return MeshData ? MeshData->SourceSceneSkeletalMeshIndex : 0;
+}
+
 const TArray<FSkeletalVertex>& USkeletalMesh::GetVertices() const
 {
     return MeshData->Vertices;

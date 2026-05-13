@@ -20,6 +20,9 @@ public:
     FSkeletalMesh* GetMeshData();
     const FSkeletalMesh* GetMeshData() const;
 
+    const FString& GetAssetPathFileName() const;
+    int32 GetSourceSceneSkeletalMeshIndex() const;
+
     const TArray<FSkeletalVertex>& GetVertices() const;
     const TArray<uint32>& GetIndices() const;
     const TArray<FSkeletalMeshSection>& GetSections() const;

@@ -150,6 +150,7 @@ public:
 
     USkeletalMesh* LoadSkeletalMesh(const FString& Path, int32 MeshIndex = 0);
     USkeletalMesh* FindSkeletalMesh(const FString& Path) const;
+    TArray<FString> GetSkeletalMeshPaths() const;
     void RestoreSkeletalMeshSlotMaterials(FSkeletalMesh& Mesh);
 
     ID3D11SamplerState* GetOrCreateSamplerState(ESamplerType Type, ID3D11Device* Device = nullptr);
@@ -260,6 +261,7 @@ private:
 
     /* Paths */
     TArray<FString> ObjFilePaths;
+    TArray<FString> SkeletalMeshFilePaths;
     TArray<FString> MaterialFilePaths;
     TArray<FString> ParticleFilePaths;
     TArray<FString> FontFilePaths;

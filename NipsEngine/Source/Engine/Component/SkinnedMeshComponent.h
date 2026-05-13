@@ -29,7 +29,7 @@ public:
     void PostDuplicate(UObject* Original) override;
     void Serialize(FArchive& Ar) override;
 
-    void SetSkeletalMesh(USkeletalMesh* InSkeletalMesh);
+    virtual void SetSkeletalMesh(USkeletalMesh* InSkeletalMesh);
     USkeletalMesh* GetSkeletalMesh() const { return SkeletalMeshAsset; }
     bool HasValidMesh() const;
 
@@ -71,7 +71,6 @@ protected:
 
 protected:
     USkeletalMesh* SkeletalMeshAsset = nullptr;
-    FString SkeletalMeshAssetPath;
     // SkeletalMeshAsset은 공유되는 자원이라 FSkinnedMeshRenderResource 내부에 SkinnedVertices 보관
     FSkinnedMeshRenderResource SkinnedRenderResource;
 

@@ -36,7 +36,7 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
     ViewportLayout.Init(InWindow, GetWorld(), &SelectionManager, this);
 
 
-    FBXPreviewViewport.Initialize(InWindow);
+    //FBXPreviewViewport.Initialize(InWindow);
 
     GetFocusedWorld()->SetActiveCamera(GetCamera());
 
@@ -49,8 +49,8 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
     SetRenderPipeline(std::make_unique<FEditorRenderPipeline>(this, Renderer));
 
     // FBX Preview Viewport 초기화
-    FBXPreviewViewport.Initialize(InWindow);
-    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
+    //FBXPreviewViewport.Initialize(InWindow);
+    //FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 }
 
 void UEditorEngine::Shutdown()
