@@ -132,7 +132,7 @@ void FEditorMainPanel::Create(FWindowsWindow* InWindow, FRenderer& InRenderer, U
 
     ConsoleWidget.Initialize(InEditorEngine);
     ControlWidget.Initialize(InEditorEngine);
-    FBXSceneViewWidget.Initialize(InEditorEngine);
+    AssetManagerWidget.Initialize(InEditorEngine);
     CameraSequenceWidget.Initialize(InEditorEngine);
     MaterialWidget.Initialize(InEditorEngine);
     PropertyWidget.Initialize(InEditorEngine);
@@ -178,7 +178,7 @@ void FEditorMainPanel::Render(float DeltaTime)
     if (bShowControl)
         ControlWidget.Render(DeltaTime);
     if (bShowFBXSceneViewer)
-        FBXSceneViewWidget.Render(DeltaTime);
+        AssetManagerWidget.Render(DeltaTime);
     if (bShowCameraSequenceEditor)
         CameraSequenceWidget.Render(DeltaTime);
     if (bShowMaterialEditor)

@@ -11,6 +11,7 @@
 #include "Core/ResourceManager.h"
 #include "Editor/EditorEngine.h"
 #include "Editor/EditorRenderPipeline.h"
+#include "Editor/Viewport/FFBXPreviewViewportLayout.h"
 #include "Editor/Viewport/FBXPreviewViewportClient.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Slate/SlateUtils.h"
@@ -725,6 +726,71 @@ namespace
     }
 }
 
+void FEditorFBXSceneViewWidget::Initialize(UEditorEngine* InEditorEngine)
+{
+    FEditorWidget::Initialize(InEditorEngine);
+    WindowTitle = "FBX Scene Viewer";
+    bOpen = true;
+    EnsurePreviewViewport();
+}
+
+void FEditorFBXSceneViewWidget::Initialize(
+    UEditorEngine* InEditorEngine,
+    int32 InPreviewViewportId,
+    const FString& InWindowTitle)
+{
+    FEditorWidget::Initialize(InEditorEngine);
+    PreviewViewportId = InPreviewViewportId;
+    WindowTitle = InWindowTitle.empty() ? "FBX Scene Viewer" : InWindowTitle;
+    bOpen = true;
+    EnsurePreviewViewport();
+}
+
+bool FEditorFBXSceneViewWidget::EnsurePreviewViewport()
+{
+    if (!EditorEngine)
+    {
+        return false;
+    }
+
+    FFBXPreviewViewportLayout& Layout = EditorEngine->GetFBXPreviewViewportLayout();
+    if (PreviewViewportId >= 0 && Layout.FindPreview(PreviewViewportId))
+    {
+        return true;
+    }
+
+    FFBXPreviewViewport* Preview = Layout.CreatePreview(WindowTitle);
+    if (!Preview)
+    {
+        PreviewViewportId = -1;
+        return false;
+    }
+
+    PreviewViewportId = Preview->Id;
+    return true;
+}
+
+FFBXPreviewViewportClient* FEditorFBXSceneViewWidget::GetPreviewClient()
+{
+    if (!EnsurePreviewViewport())
+    {
+        return nullptr;
+    }
+
+    FFBXPreviewViewport* Preview = EditorEngine->GetFBXPreviewViewportLayout().FindPreview(PreviewViewportId);
+    return Preview ? &Preview->Client : nullptr;
+}
+
+UWorld* FEditorFBXSceneViewWidget::ResetPreviewWorld()
+{
+    if (!EnsurePreviewViewport())
+    {
+        return nullptr;
+    }
+
+    return EditorEngine->GetFBXPreviewViewportLayout().ResetPreviewWorld(PreviewViewportId);
+}
+
 bool FEditorFBXSceneViewWidget::OpenFBXFileDialog(FString& OutFilePath) const
 {
     OutFilePath.clear();
@@ -767,9 +833,9 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
     SelectedSkeletalMeshIndex = -1;
     SelectedBoneIndex = -1;
     PreviewSkinnedMeshComponents.clear();
-    if (EditorEngine)
+    if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
     {
-        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+        FBXClient->ClearBoneSelection();
     }
     LoadedFilePath = FilePath;
 
@@ -819,18 +885,22 @@ void FEditorFBXSceneViewWidget::LoadFBXScene(const FString& FilePath)
 void FEditorFBXSceneViewWidget::Render(float DeltaTime)
 {
     (void)DeltaTime;
+    if (!bOpen)
+    {
+        return;
+    }
 
     ImGui::SetNextWindowSize(ImVec2(1100.0f, 650.0f), ImGuiCond_Once);
-    if (!ImGui::Begin("FBX Scene Viewer"))
+    if (!ImGui::Begin(WindowTitle.c_str(), &bOpen))
     {
         ImGui::End();
         return;
     }
 
     // 뷰포트 피킹 결과를 선택 노드에 반영
-    if (EditorEngine)
+    if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
     {
-        const int32 Picked = EditorEngine->GetFBXPreviewViewportClient().ConsumePickedNodeIndex();
+        const int32 Picked = FBXClient->ConsumePickedNodeIndex();
         if (Picked >= 0)
         {
             SelectedNodeIndex = Picked;
@@ -898,36 +968,37 @@ void FEditorFBXSceneViewWidget::Render(float DeltaTime)
 void FEditorFBXSceneViewWidget::RenderViewport()
 {
     if (!EditorEngine) { return; }
+    FFBXPreviewViewportClient* FBXClient = GetPreviewClient();
+    if (!FBXClient) { return; }
 
     const ImVec2 AvailSize = ImGui::GetContentRegionAvail();
     const int32 W = std::max(1, static_cast<int32>(AvailSize.x));
     const int32 H = std::max(1, static_cast<int32>(AvailSize.y));
     const ImVec2 ImageSize(static_cast<float>(W), static_cast<float>(H));
 
-    FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
     const ImVec2 ImagePos = ImGui::GetCursorScreenPos();
 
     const ImVec2 ImageEnd(ImagePos.x + ImageSize.x, ImagePos.y + ImageSize.y);
     const bool bHovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(ImagePos, ImageEnd);
-    FBXClient.SetViewportRect(
+    FBXClient->SetViewportRect(
         static_cast<int32>(ImagePos.x),
         static_cast<int32>(ImagePos.y),
         W,
         H);
-    FBXClient.SetHovered(bHovered);
+    FBXClient->SetHovered(bHovered);
 
     //땜빵코드 이후에 제거 필요 Week10
-    if (bHovered || FBXClient.IsInputCaptured())
+    if (bHovered || FBXClient->IsInputCaptured())
     {
         FGuiInputState& GuiState = InputSystem::Get().GetGuiInputState();
         GuiState.bViewportInputBlocked = true;
-        GuiState.bViewportInputBlockCapturesMouse = FBXClient.IsInputCaptured();
-        GuiState.ViewportInputBlockRect = FBXClient.GetViewportRect();
+        GuiState.bViewportInputBlockCapturesMouse = FBXClient->IsInputCaptured();
+        GuiState.ViewportInputBlockRect = FBXClient->GetViewportRect();
     }
 
     // 렌더 파이프라인에서 이번 프레임에 렌더된 SRV를 가져와 표시
     const FEditorRenderPipeline* Pipeline = EditorEngine->GetEditorRenderPipeline();
-    ID3D11ShaderResourceView* SRV = Pipeline ? Pipeline->GetFBXPreviewSRV() : nullptr;
+    ID3D11ShaderResourceView* SRV = Pipeline ? Pipeline->GetFBXPreviewSRV(PreviewViewportId) : nullptr;
 
     if (SRV)
     {
@@ -1002,12 +1073,11 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
         SelectedSkeletalMeshIndex = -1;
         SelectedBoneIndex = -1;
         PreviewSkinnedMeshComponents.clear();
-        if (EditorEngine)
+        if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
         {
-            FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
-            FBXClient.ClearBoneSelection();
-            FBXClient.ClearPickableComponents();
-            EditorEngine->ResetFBXPreviewWorld();
+            FBXClient->ClearBoneSelection();
+            FBXClient->ClearPickableComponents();
+            ResetPreviewWorld();
         }
         StatusMessage = "No FBX loaded.";
     }
@@ -1015,39 +1085,37 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
     // --- Show Flags ---
     ImGui::Separator();
 
-    if (EditorEngine)
+    if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
     {
-        FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
-
         ImGui::SetNextItemWidth(110.0f);
         if (ImGui::BeginCombo("##FBXShowFlags", "Show Flags"))
         {
-            bool bGrid = FBXClient.GetShowGrid();
-            bool bAxis = FBXClient.GetShowAxis();
-            if (ImGui::Checkbox("Grid", &bGrid)) { FBXClient.SetShowGrid(bGrid); }
-            if (ImGui::Checkbox("Axis", &bAxis)) { FBXClient.SetShowAxis(bAxis); }
+            bool bGrid = FBXClient->GetShowGrid();
+            bool bAxis = FBXClient->GetShowAxis();
+            if (ImGui::Checkbox("Grid", &bGrid)) { FBXClient->SetShowGrid(bGrid); }
+            if (ImGui::Checkbox("Axis", &bAxis)) { FBXClient->SetShowAxis(bAxis); }
             ImGui::EndCombo();
         }
         ImGui::SameLine();
 
-        if (UGizmoComponent* PreviewGizmo = FBXClient.GetPreviewGizmo())
+        if (UGizmoComponent* PreviewGizmo = FBXClient->GetPreviewGizmo())
         {
             ImGui::TextDisabled("|");
             ImGui::SameLine();
             int32 GizmoMode = static_cast<int32>(PreviewGizmo->GetGizmoMode());
             if (ImGui::RadioButton("Translate", &GizmoMode, static_cast<int32>(EGizmoMode::Translate)))
             {
-                FBXClient.SetPreviewGizmoMode(EGizmoMode::Translate);
+                FBXClient->SetPreviewGizmoMode(EGizmoMode::Translate);
             }
             ImGui::SameLine();
             if (ImGui::RadioButton("Rotate", &GizmoMode, static_cast<int32>(EGizmoMode::Rotate)))
             {
-                FBXClient.SetPreviewGizmoMode(EGizmoMode::Rotate);
+                FBXClient->SetPreviewGizmoMode(EGizmoMode::Rotate);
             }
             ImGui::SameLine();
             if (ImGui::RadioButton("Scale", &GizmoMode, static_cast<int32>(EGizmoMode::Scale)))
             {
-                FBXClient.SetPreviewGizmoMode(EGizmoMode::Scale);
+                FBXClient->SetPreviewGizmoMode(EGizmoMode::Scale);
             }
             ImGui::SameLine();
         }
@@ -1073,7 +1141,7 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
             "World Normal",
         };
 
-        EViewMode CurrentMode = FBXClient.GetViewMode();
+        EViewMode CurrentMode = FBXClient->GetViewMode();
         const char* CurrentLabel = "Lit";
         for (int32 i = 0; i < static_cast<int32>(IM_ARRAYSIZE(ViewModes)); ++i)
         {
@@ -1087,7 +1155,7 @@ void FEditorFBXSceneViewWidget::RenderToolbar()
             {
                 const bool bSel = (ViewModes[i] == CurrentMode);
                 if (ImGui::Selectable(ViewModeLabels[i], bSel))
-                    FBXClient.SetViewMode(ViewModes[i]);
+                    FBXClient->SetViewMode(ViewModes[i]);
                 if (bSel)
                     ImGui::SetItemDefaultFocus();
             }
@@ -1213,9 +1281,12 @@ void FEditorFBXSceneViewWidget::RenderBoneTreeRecursive(
     {
         SelectedSkeletalMeshIndex = SkeletalMeshIndex;
         SelectedBoneIndex = BoneIndex;
-        if (EditorEngine && SkinnedMeshComponent)
+        if (SkinnedMeshComponent)
         {
-            EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, BoneIndex);
+            if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
+            {
+                FBXClient->SelectBone(SkinnedMeshComponent, BoneIndex);
+            }
         }
     }
 
@@ -1316,16 +1387,21 @@ void FEditorFBXSceneViewWidget::SelectRootBoneForNode(int32 NodeIndex)
         // Static mesh 노드인 경우 기즈모를 해당 컴포넌트에 표시
         if (Node.StaticMeshIndex >= 0)
         {
-            FFBXPreviewViewportClient& FBXClient = EditorEngine->GetFBXPreviewViewportClient();
-            UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(FBXClient.GetSelectedComponent());
-            if (StaticMeshComp)
+            if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
             {
-                FBXClient.SelectStaticMesh(StaticMeshComp);
-                return;
+                UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(FBXClient->GetSelectedComponent());
+                if (StaticMeshComp)
+                {
+                    FBXClient->SelectStaticMesh(StaticMeshComp);
+                    return;
+                }
             }
         }
 
-        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+        if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
+        {
+            FBXClient->ClearBoneSelection();
+        }
         return;
     }
 
@@ -1345,13 +1421,19 @@ void FEditorFBXSceneViewWidget::SelectRootBoneForNode(int32 NodeIndex)
     {
         SelectedSkeletalMeshIndex = -1;
         SelectedBoneIndex = -1;
-        EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
+        if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
+        {
+            FBXClient->ClearBoneSelection();
+        }
         return;
     }
 
     SelectedSkeletalMeshIndex = Node.SkeletalMeshIndex;
     SelectedBoneIndex = RootBoneIndex;
-    EditorEngine->GetFBXPreviewViewportClient().SelectBone(SkinnedMeshComponent, RootBoneIndex);
+    if (FFBXPreviewViewportClient* FBXClient = GetPreviewClient())
+    {
+        FBXClient->SelectBone(SkinnedMeshComponent, RootBoneIndex);
+    }
 }
 
 void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
@@ -1363,14 +1445,20 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
         return;
     }
 
-    UWorld* World = EditorEngine ? EditorEngine->ResetFBXPreviewWorld() : nullptr;
+    UWorld* World = ResetPreviewWorld();
     if (World == nullptr)
     {
         StatusMessage = "FBX Preview World가 null입니다. FBX Actor 스폰 실패.";
         return;
     }
-    EditorEngine->GetFBXPreviewViewportClient().ClearBoneSelection();
-    EditorEngine->GetFBXPreviewViewportClient().ClearPickableComponents();
+    FFBXPreviewViewportClient* FBXClient = GetPreviewClient();
+    if (!FBXClient)
+    {
+        StatusMessage = "FBX Preview Viewport가 null입니다. FBX Actor 스폰 실패.";
+        return;
+    }
+    FBXClient->ClearBoneSelection();
+    FBXClient->ClearPickableComponents();
     SelectedNodeIndex = -1;
     SelectedSkeletalMeshIndex = -1;
     SelectedBoneIndex = -1;
@@ -1437,7 +1525,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
 
         if (MeshData.SourceNodeIndex >= 0)
         {
-            EditorEngine->GetFBXPreviewViewportClient().RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
+            FBXClient->RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
         }
 
         ++SkeletalSpawnedCount;
@@ -1478,7 +1566,7 @@ void FEditorFBXSceneViewWidget::SpawnImportedFBXMeshActors()
                 MeshData.SourceNodeIndex,
                 ImportScene,
                 SpawnedSkinnedMeshComponents);
-            EditorEngine->GetFBXPreviewViewportClient().RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
+            FBXClient->RegisterPickableComponent(MeshComponent, MeshData.SourceNodeIndex);
         }
 
         ++StaticSpawnedCount;

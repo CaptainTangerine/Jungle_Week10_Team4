@@ -27,16 +27,13 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
     }
     SetActiveWorld(WorldList[0].ContextHandle);
     ApplySpatialIndexMaintenanceSettings(WorldList[0].World);
-    EnsureFBXPreviewWorld();
+    FBXPreviewViewportLayout.Init(InWindow, nullptr, this);
 
     MainPanel.Create(Window, Renderer, this);
 
     // Selection & Gizmo
     SelectionManager.Init();
     ViewportLayout.Init(InWindow, GetWorld(), &SelectionManager, this);
-
-
-    FBXPreviewViewport.Initialize(InWindow);
 
     GetFocusedWorld()->SetActiveCamera(GetCamera());
 
@@ -47,10 +44,6 @@ void UEditorEngine::Init(FWindowsWindow* InWindow)
 
     // Editor용 렌더 파이프라인 세팅
     SetRenderPipeline(std::make_unique<FEditorRenderPipeline>(this, Renderer));
-
-    // FBX Preview Viewport 초기화
-    FBXPreviewViewport.Initialize(InWindow);
-    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 }
 
 void UEditorEngine::Shutdown()
@@ -63,7 +56,7 @@ void UEditorEngine::Shutdown()
 
     FEditorSettings::Get().SaveToFile(FEditorSettings::GetDefaultSettingsPath());
 
-    FBXPreviewViewport.SetWorld(nullptr);
+    FBXPreviewViewportLayout.Shutdown();
 
     CloseScene();
     SelectionManager.Shutdown();
@@ -97,7 +90,7 @@ void UEditorEngine::Tick(float DeltaTime)
         }
     }
     ViewportLayout.Tick(DeltaTime);
-    FBXPreviewViewport.Tick(DeltaTime);
+    FBXPreviewViewportLayout.Tick(DeltaTime);
     MainPanel.Update();
     WorldTick(DeltaTime);
     Render(DeltaTime);
@@ -279,14 +272,22 @@ void UEditorEngine::ResetViewport()
 void UEditorEngine::CloseScene()
 {
     SelectionManager.ClearSelection();
-    FBXPreviewViewport.SetWorld(nullptr);
 
-    for (FWorldContext& Ctx : WorldList)
+    for (auto It = WorldList.begin(); It != WorldList.end();)
     {
-        Ctx.World->EndPlay(EEndPlayReason::Type::EndPlayInEditor);
-        UObjectManager::Get().DestroyObject(Ctx.World);
+        if (It->WorldType == EWorldType::ViewerPreview)
+        {
+            ++It;
+            continue;
+        }
+
+        if (It->World)
+        {
+            It->World->EndPlay(EEndPlayReason::Type::EndPlayInEditor);
+            UObjectManager::Get().DestroyObject(It->World);
+        }
+        It = WorldList.erase(It);
     }
-    WorldList.clear();
     ActiveWorldHandle = FName::None;
 
     for (int32 i = 0; i < FEditorViewportLayout::MaxViewports; ++i)
@@ -307,55 +308,8 @@ void UEditorEngine::NewScene()
     FWorldContext& Ctx = CreateWorldContext(EWorldType::Editor, FName("NewScene"), "New Scene");
     SetActiveWorld(Ctx.ContextHandle);
     ApplySpatialIndexMaintenanceSettings(Ctx.World);
-    EnsureFBXPreviewWorld();
-    FBXPreviewViewport.SetWorld(GetFBXPreviewWorld());
 
     ResetViewport();
-}
-
-UWorld* UEditorEngine::EnsureFBXPreviewWorld()
-{
-    const FName Handle = GetFBXPreviewWorldHandle();
-    if (FWorldContext* ExistingContext = GetWorldContextFromHandle(Handle))
-    {
-        if (ExistingContext->World)
-        {
-            ExistingContext->WorldType = EWorldType::ViewerPreview;
-            ExistingContext->World->SetWorldType(EWorldType::ViewerPreview);
-            ApplySpatialIndexMaintenanceSettings(ExistingContext->World);
-        }
-        return ExistingContext->World;
-    }
-
-    FWorldContext& Ctx = CreateWorldContext(EWorldType::ViewerPreview, Handle, "FBX Preview World");
-    if (Ctx.World)
-    {
-        Ctx.World->SetWorldType(EWorldType::ViewerPreview);
-        ApplySpatialIndexMaintenanceSettings(Ctx.World);
-    }
-
-    return Ctx.World;
-}
-
-UWorld* UEditorEngine::ResetFBXPreviewWorld()
-{
-    FBXPreviewViewport.SetWorld(nullptr);  // dangling pointer 방지
-    const FName Handle = GetFBXPreviewWorldHandle();
-    DestroyWorldContext(Handle);
-    UWorld* NewWorld = EnsureFBXPreviewWorld();
-    FBXPreviewViewport.SetWorld(NewWorld); // 새 월드로 재연결
-    return NewWorld;
-}
-
-UWorld* UEditorEngine::GetFBXPreviewWorld() const
-{
-    const FWorldContext* Ctx = GetWorldContextFromHandle(GetFBXPreviewWorldHandle());
-    return Ctx ? Ctx->World : nullptr;
-}
-
-FName UEditorEngine::GetFBXPreviewWorldHandle() const
-{
-    return FName("FBXPreviewWorld");
 }
 
 void UEditorEngine::ApplySpatialIndexMaintenanceSettings(UWorld* TargetWorld)
@@ -396,13 +350,22 @@ void UEditorEngine::ClearScene()
 {
     SelectionManager.ClearSelection();
 
-    for (FWorldContext& Ctx : WorldList)
+    for (auto It = WorldList.begin(); It != WorldList.end();)
     {
-        Ctx.World->EndPlay(EEndPlayReason::Type::LevelTransition);
-        UObjectManager::Get().DestroyObject(Ctx.World);
+        if (It->WorldType == EWorldType::ViewerPreview)
+        {
+            ++It;
+            continue;
+        }
+
+        if (It->World)
+        {
+            It->World->EndPlay(EEndPlayReason::Type::LevelTransition);
+            UObjectManager::Get().DestroyObject(It->World);
+        }
+        It = WorldList.erase(It);
     }
 
-    WorldList.clear();
     ActiveWorldHandle = FName::None;
 
     for (int32 i = 0; i < FEditorViewportLayout::MaxViewports; ++i)

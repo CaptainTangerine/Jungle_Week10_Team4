@@ -111,6 +111,9 @@ struct FPassBatcherBinding
 class FRenderer
 {
 public:
+    static constexpr int32 EditorViewportResourceCount = 4;
+    static constexpr int32 MaxViewportResourceCount = 8;
+
     void Create(HWND hWindow);
     void CreateResources();
     void Release();
@@ -222,7 +225,7 @@ private:
     // Directional, Ambient 같은 전역 Light 개수 제한
     constexpr static uint32 MaxSceneGlobalLightCount = 64;
 
-    // 인덱스 0-3: 에디터 뷰포트, 인덱스 4: FBX Preview 전용
-    FViewportRenderResource ViewportResources[5];
+    // 인덱스 0-3: 에디터 뷰포트, 이후: FBX Preview 뷰포트
+    FViewportRenderResource ViewportResources[MaxViewportResourceCount];
 };
 

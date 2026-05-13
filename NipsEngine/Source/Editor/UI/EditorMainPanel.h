@@ -4,6 +4,7 @@
 #include "ImGui/imgui.h"
 #include "Editor/UI/EditorConsoleWidget.h"
 #include "Editor/UI/EditorControlWidget.h"
+#include "Editor/UI/EditorAssetManagerWidget.h"
 #include "Editor/UI/EditorFBXSceneViewWidget.h"
 #include "Editor/UI/EditorCameraSequenceWidget.h"
 #include "Editor/UI/EditorMaterialWidget.h"
@@ -45,7 +46,7 @@ private:
     ImVector<ImWchar> FontGlyphRanges; // 폰트 아틀라스 빌드 전까지 수명 유지 필요
     FEditorConsoleWidget ConsoleWidget;
     FEditorControlWidget ControlWidget;
-    FEditorFBXSceneViewWidget FBXSceneViewWidget;
+    FEditorAssetManagerWidget AssetManagerWidget;
     FEditorCameraSequenceWidget CameraSequenceWidget;
     FEditorPropertyWidget PropertyWidget;
     FEditorSceneWidget SceneWidget;

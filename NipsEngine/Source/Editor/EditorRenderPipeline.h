@@ -5,6 +5,7 @@
 
 class UEditorEngine;
 class FEditorViewportClient;
+struct FFBXPreviewViewport;
 struct FSceneView;
 
 class FEditorRenderPipeline : public IRenderPipeline
@@ -18,7 +19,7 @@ public:
     const FRenderCollector::FDecalStats& GetViewportDecalStats(int32 ViewportIndex) const;
     const FRenderCollector::FShadowStats& GetViewportShadowStats(int32 ViewportIndex) const;
 
-    ID3D11ShaderResourceView* GetFBXPreviewSRV() const { return FBXPreviewSRV; }
+    ID3D11ShaderResourceView* GetFBXPreviewSRV(int32 PreviewId) const;
 
 private:
     /*
@@ -28,9 +29,7 @@ private:
      */
     void RenderViewport(FRenderer& Renderer, int32 ViewportIndex);
     bool PrepareViewport(FRenderer& Renderer, int32 ViewportIndex, FSceneView& OutSceneView, FEditorViewportClient*& OutViewportClient);
-    void RenderFBXPreview(FRenderer& Renderer);
-
-    static constexpr int32 FBXPreviewResourceIndex = 4;
+    void RenderFBXPreview(FRenderer& Renderer, FFBXPreviewViewport& Preview);
 
     UEditorEngine* Editor = nullptr;
     FRenderCollector Collector;
@@ -39,5 +38,4 @@ private:
     TArray<FRenderCollector::FDecalStats> ViewportDecalStats;
     TArray<FRenderCollector::FShadowStats> ViewportShadowStats;
 
-    ID3D11ShaderResourceView* FBXPreviewSRV = nullptr;
 };

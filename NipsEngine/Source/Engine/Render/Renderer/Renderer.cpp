@@ -354,7 +354,7 @@ void FRenderer::Render(const FRenderBus& InRenderBus)
 
 FViewportRenderResource& FRenderer::AcquireViewportResource(uint32 Width, uint32 Height, int32 Index)
 {
-    assert(Index < 5 && "Index Out of Bound");
+    assert(Index >= 0 && Index < MaxViewportResourceCount && "Index Out of Bound");
 
     FViewportRenderResource& Res = ViewportResources[Index];
 
@@ -440,7 +440,7 @@ void FRenderer::InitializeViewportResource(uint32 Width, uint32 Height, int32 In
 
 void FRenderer::ReleaseViewportResource(int32 Index)
 {
-    assert(Index < 5 && "Index Out of Bound");
+    assert(Index >= 0 && Index < MaxViewportResourceCount && "Index Out of Bound");
 
     FViewportRenderResource& Res = ViewportResources[Index];
 

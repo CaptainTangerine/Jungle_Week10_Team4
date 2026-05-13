@@ -1,6 +1,7 @@
 ﻿#include "EditorRenderPipeline.h"
 
 #include "Editor/EditorEngine.h"
+#include "Editor/Viewport/FFBXPreviewViewportLayout.h"
 #include "Editor/Viewport/FBXPreviewViewportClient.h"
 #include "Render/Renderer/Renderer.h"
 #include "Core/Logging/Stats.h"
@@ -38,7 +39,10 @@ void FEditorRenderPipeline::Execute(float DeltaTime, FRenderer& Renderer)
         RenderViewport(Renderer, i);
     }
 
-    RenderFBXPreview(Renderer);
+    for (FFBXPreviewViewport& Preview : Editor->GetFBXPreviewViewportLayout().GetPreviews())
+    {
+        RenderFBXPreview(Renderer, Preview);
+    }
 
     Renderer.UseBackBufferRenderTargets();
 
@@ -173,11 +177,19 @@ const FRenderCollector::FShadowStats& FEditorRenderPipeline::GetViewportShadowSt
     return ViewportShadowStats[ViewportIndex];
 }
 
-void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
+ID3D11ShaderResourceView* FEditorRenderPipeline::GetFBXPreviewSRV(int32 PreviewId) const
 {
-    FBXPreviewSRV = nullptr;
+    const FFBXPreviewViewport* Preview = Editor
+        ? Editor->GetFBXPreviewViewportLayout().FindPreview(PreviewId)
+        : nullptr;
+    return Preview ? Preview->SRV : nullptr;
+}
 
-    FFBXPreviewViewportClient& FBXClient = Editor->GetFBXPreviewViewportClient();
+void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer, FFBXPreviewViewport& Preview)
+{
+    Preview.SRV = nullptr;
+
+    FFBXPreviewViewportClient& FBXClient = Preview.Client;
     UWorld* FBXWorld = FBXClient.GetWorld();
     if (!FBXWorld) { return; }
 
@@ -191,7 +203,7 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     FViewportRenderResource& Resource = Renderer.AcquireViewportResource(
         static_cast<uint32>(Rect.Width),
         static_cast<uint32>(Rect.Height),
-        FBXPreviewResourceIndex);
+        Preview.ResourceIndex);
 
     FRenderTargetSet& RTS = Resource.GetView();
     Renderer.BeginViewportFrame(&RTS);
@@ -246,5 +258,5 @@ void FEditorRenderPipeline::RenderFBXPreview(FRenderer& Renderer)
     DebugLineBatcher.SetDepthStencilType(EDepthStencilType::Default);
 
     // GridRenderPass 등 후속 패스가 합성된 최종 결과를 사용
-    FBXPreviewSRV = RTS.FinalSRV;
+    Preview.SRV = RTS.FinalSRV;
 }
